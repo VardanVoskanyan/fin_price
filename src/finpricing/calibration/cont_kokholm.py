@@ -107,21 +107,23 @@ class ContKokholmCalibrator(Calibrator):
         surface = self._validate_surface(option_surface)
         bounds = _MERTON_BOUNDS if self.model_type == 'Merton' else _KOU_BOUNDS
 
-        strikes = surface['strike'].to_numpy()
-        maturities = surface['maturity'].to_numpy()
+        V0            = float(surface['V0'].iloc[0]) if 'V0' in surface.columns else 1.0
+        strikes       = surface['strike'].to_numpy()
+        maturities    = surface['maturity'].to_numpy()
         market_prices = surface['price'].to_numpy()
-        option_types = surface['option_type'].to_numpy()
-        weights = surface['weight'].to_numpy()
+        option_types  = surface['option_type'].to_numpy()
+        weights       = surface['weight'].to_numpy()
+        r             = float(surface['r'].iloc[0]) if 'r' in surface.columns else 0.0
 
         def loss(x: np.ndarray) -> float:
             try:
                 params = _build_params(x, self.model_type)
                 model_prices = np.array([
                     price_vix_options(
-                        V0=strikes[i],   # VIX level treated as forward for moneyness
+                        V0=V0,
                         K=strikes[i],
                         T=maturities[i],
-                        r=0.0,
+                        r=r,
                         model_params=params,
                         pricing_method=self.pricing_method,
                         option_type=option_types[i],
