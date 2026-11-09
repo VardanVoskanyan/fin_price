@@ -11,6 +11,7 @@ dependencies = [
     "numpy>=1.26",
     "scipy>=1.12",
     "pydantic>=2.0",
+    "pandas>=2.2",
     "yfinance>=0.2",
 ]
 
@@ -18,7 +19,6 @@ dependencies = [
 app = [
     "dash>=2.17",
     "plotly>=5.22",
-    "pandas>=2.2",
 ]
 ml = [
     "torch>=2.3",
@@ -43,8 +43,9 @@ packages = ["src/finpricing"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short -m 'not slow'"
 pythonpath = ["src"]
+markers = ["slow: long-running end-to-end tests (run with `pytest -m slow`)"]
 
 [tool.ruff]
 src = ["src"]
