@@ -97,42 +97,19 @@ class ContKokholmCalibrator(Calibrator):
 
         Args:
             option_surface: DataFrame with columns 'strike', 'maturity', 'price'.
-                            Optional: 'option_type' (default 'call'), 'weight' (default 1.0).
+                            Optional: 'option_type' (default 'call'), 'weight' (default 1.0),
+                            'V0' (current VIX level, default 1.0), 'r' (rate, default 0.0).
             Vi_0: Initial variance swap rates. If None, uses paper defaults.
 
         Returns:
             (fitted_params, None) — the second element is reserved for future
             joint calibration of b_i coefficients.
         """
-        surface = self._validate_surface(option_surface)
+        data = self._prepare(option_surface)
         bounds = _MERTON_BOUNDS if self.model_type == 'Merton' else _KOU_BOUNDS
 
-        V0            = float(surface['V0'].iloc[0]) if 'V0' in surface.columns else 1.0
-        strikes       = surface['strike'].to_numpy()
-        maturities    = surface['maturity'].to_numpy()
-        market_prices = surface['price'].to_numpy()
-        option_types  = surface['option_type'].to_numpy()
-        weights       = surface['weight'].to_numpy()
-        r             = float(surface['r'].iloc[0]) if 'r' in surface.columns else 0.0
-
         def loss(x: np.ndarray) -> float:
-            try:
-                params = _build_params(x, self.model_type)
-                model_prices = np.array([
-                    price_vix_options(
-                        V0=V0,
-                        K=strikes[i],
-                        T=maturities[i],
-                        r=r,
-                        model_params=params,
-                        pricing_method=self.pricing_method,
-                        option_type=option_types[i],
-                    )
-                    for i in range(len(strikes))
-                ])
-                return float(np.sum(weights * (model_prices - market_prices) ** 2))
-            except Exception:
-                return 1e10
+            return self._loss(x, data)
 
         if self.verbose:
             print(f"Starting differential evolution ({self.model_type} model)...")
@@ -166,3 +143,38 @@ class ContKokholmCalibrator(Calibrator):
             print(f"Final loss: {min(local_result.fun, de_result.fun):.6f}")
 
         return _build_params(best_x, self.model_type), None
+
+    def objective(self, x: np.ndarray, option_surface: pd.DataFrame) -> float:
+        """Weighted SSE between model and market prices for parameter vector ``x``."""
+        return self._loss(np.asarray(x, dtype=float), self._prepare(option_surface))
+
+    def _prepare(self, option_surface: pd.DataFrame) -> dict:
+        surface = self._validate_surface(option_surface)
+        return {
+            'V0':            float(surface['V0'].iloc[0]) if 'V0' in surface.columns else 1.0,
+            'r':             float(surface['r'].iloc[0]) if 'r' in surface.columns else 0.0,
+            'strikes':       surface['strike'].to_numpy(),
+            'maturities':    surface['maturity'].to_numpy(),
+            'market_prices': surface['price'].to_numpy(),
+            'option_types':  surface['option_type'].to_numpy(),
+            'weights':       surface['weight'].to_numpy(),
+        }
+
+    def _loss(self, x: np.ndarray, data: dict) -> float:
+        try:
+            params = _build_params(x, self.model_type)
+            model_prices = np.array([
+                price_vix_options(
+                    V0=data['V0'],
+                    K=K,
+                    T=T,
+                    r=data['r'],
+                    model_params=params,
+                    pricing_method=self.pricing_method,
+                    option_type=opt,
+                )
+                for K, T, opt in zip(data['strikes'], data['maturities'], data['option_types'])
+            ])
+            return float(np.sum(data['weights'] * (model_prices - data['market_prices']) ** 2))
+        except Exception:
+            return 1e10
