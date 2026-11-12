@@ -40,3 +40,23 @@ class VIXKouModelParameters(BasicModelParameters):
     p: float = Field(0.86, ge=0, le=1, description="Probability of upward jump")
     alpha_plus: float = Field(4.25, gt=0, description="Rate of upward jumps")
     alpha_minus: float = Field(19.9, gt=0, description="Rate of downward jumps")
+
+
+class HestonParameters(BasicModelParameters):
+    """
+    Heston (1993) stochastic volatility parameters.
+
+        dS_t = (r - q) S_t dt + sqrt(v_t) S_t dW_t
+        dv_t = kappa (theta - v_t) dt + xi sqrt(v_t) dZ_t,   d<W, Z>_t = rho dt
+    """
+    model_type: str = 'Heston'
+    v0: float = Field(0.04, gt=0, description="Initial variance")
+    kappa: float = Field(1.5, gt=0, description="Mean-reversion speed of the variance")
+    theta: float = Field(0.04, gt=0, description="Long-run variance")
+    xi: float = Field(0.5, gt=0, description="Volatility of variance (vol-of-vol)")
+    rho: float = Field(-0.7, ge=-1, le=1, description="Spot/variance correlation")
+
+    @property
+    def feller_satisfied(self) -> bool:
+        """2 kappa theta >= xi^2: the variance process stays strictly positive."""
+        return 2 * self.kappa * self.theta >= self.xi ** 2
