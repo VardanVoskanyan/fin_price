@@ -1,9 +1,9 @@
 """
-Hardcoded paper fixtures from Cont & Kokholm (2014).
+Hardcoded paper fixtures from Cont & Kokholm (2013).
 
 Parameters sourced from Table 2 of:
   R. Cont, T. Kokholm — "A consistent pricing model for index options
-  and volatility derivatives", Mathematical Finance, 2014.
+  and volatility derivatives", Mathematical Finance 23(2), 2013.
 """
 import numpy as np
 from finpricing.parameters import VIXMertonModelParameters, VIXKouModelParameters

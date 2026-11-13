@@ -76,7 +76,7 @@ def get_UTm(
     """
     Compute the auxiliary index price ratio U_{T_k} = S_{T_k} / S_0.
 
-    See Cont & Kokholm (2014), equation on p. 259.
+    See Cont & Kokholm (2013), equation on p. 259.
 
     Args:
         Vi_0: Initial variance swap rates, shape (k,)
@@ -116,7 +116,7 @@ class VixModel:
     """
     Simultaneous pricing model for S&P index options and VIX derivatives.
 
-    Implements the Cont & Kokholm (2014) framework with Merton (Gaussian)
+    Implements the Cont & Kokholm (2013) framework with Merton (Gaussian)
     or Kou (double-exponential) jump distributions.
 
     Args:
