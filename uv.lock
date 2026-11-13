@@ -627,16 +627,20 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
-    { name = "pandas" },
     { name = "pydantic" },
     { name = "scipy" },
-    { name = "yfinance" },
 ]
 
 [package.optional-dependencies]
 app = [
     { name = "dash" },
+    { name = "pandas" },
     { name = "plotly" },
+    { name = "yfinance" },
+]
+data = [
+    { name = "pandas" },
+    { name = "yfinance" },
 ]
 dev = [
     { name = "maturin" },
@@ -666,7 +670,8 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },
     { name = "nbformat", marker = "extra == 'notebook'", specifier = ">=5.9" },
     { name = "numpy", specifier = ">=1.26" },
-    { name = "pandas", specifier = ">=2.2" },
+    { name = "pandas", marker = "extra == 'app'", specifier = ">=2.2" },
+    { name = "pandas", marker = "extra == 'data'", specifier = ">=2.2" },
     { name = "plotly", marker = "extra == 'app'", specifier = ">=5.22" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
@@ -675,9 +680,10 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.12" },
     { name = "torch", marker = "extra == 'ml'", specifier = ">=2.3" },
     { name = "torchsde", marker = "extra == 'ml'", specifier = ">=0.2" },
-    { name = "yfinance", specifier = ">=0.2" },
+    { name = "yfinance", marker = "extra == 'app'", specifier = ">=0.2" },
+    { name = "yfinance", marker = "extra == 'data'", specifier = ">=0.2" },
 ]
-provides-extras = ["app", "ml", "notebook", "dev"]
+provides-extras = ["data", "app", "ml", "notebook", "dev"]
 
 [[package]]
 name = "flask"

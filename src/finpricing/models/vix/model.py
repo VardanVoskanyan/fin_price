@@ -253,8 +253,8 @@ class VixModel:
         Calibrate model parameters to an observed option surface.
 
         Args:
-            option_surface: DataFrame with columns 'strike', 'maturity', 'price'
-                            and optional 'option_type' (default 'call').
+            option_surface: VIX option quotes (``finpricing.calibration.OptionSurface``);
+                            its ``spot`` is the current VIX level.
             model_type: Override model type for calibration. Defaults to self.model_type.
         """
         from finpricing.calibration.cont_kokholm import ContKokholmCalibrator
