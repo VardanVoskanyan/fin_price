@@ -4,14 +4,14 @@ Calibration of the Cont-Kokholm model to an observed VIX option surface.
 from __future__ import annotations
 
 import warnings
+
 import numpy as np
-import pandas as pd
 from scipy.optimize import differential_evolution, minimize
 
 from finpricing.calibration.base import Calibrator
-from finpricing.parameters import VIXMertonModelParameters, VIXKouModelParameters
+from finpricing.calibration.surface import OptionSurface
 from finpricing.models.vix.pricing import price_vix_options
-
+from finpricing.parameters import VIXKouModelParameters, VIXMertonModelParameters
 
 # Parameter bounds: (lower, upper) for each free parameter
 _MERTON_BOUNDS: list[tuple[float, float]] = [
@@ -88,7 +88,7 @@ class ContKokholmCalibrator(Calibrator):
 
     def calibrate(
         self,
-        option_surface: pd.DataFrame,
+        surface: OptionSurface,
         Vi_0: np.ndarray | None = None,
         **kwargs,
     ) -> tuple[VIXMertonModelParameters | VIXKouModelParameters, None]:
@@ -96,41 +96,17 @@ class ContKokholmCalibrator(Calibrator):
         Fit model parameters to the observed option surface.
 
         Args:
-            option_surface: DataFrame with columns 'strike', 'maturity', 'price'.
-                            Optional: 'option_type' (default 'call'), 'weight' (default 1.0).
+            surface: VIX option quotes; ``surface.spot`` is the current VIX level.
             Vi_0: Initial variance swap rates. If None, uses paper defaults.
 
         Returns:
             (fitted_params, None) — the second element is reserved for future
             joint calibration of b_i coefficients.
         """
-        surface = self._validate_surface(option_surface)
         bounds = _MERTON_BOUNDS if self.model_type == 'Merton' else _KOU_BOUNDS
 
-        strikes = surface['strike'].to_numpy()
-        maturities = surface['maturity'].to_numpy()
-        market_prices = surface['price'].to_numpy()
-        option_types = surface['option_type'].to_numpy()
-        weights = surface['weight'].to_numpy()
-
         def loss(x: np.ndarray) -> float:
-            try:
-                params = _build_params(x, self.model_type)
-                model_prices = np.array([
-                    price_vix_options(
-                        V0=strikes[i],   # VIX level treated as forward for moneyness
-                        K=strikes[i],
-                        T=maturities[i],
-                        r=0.0,
-                        model_params=params,
-                        pricing_method=self.pricing_method,
-                        option_type=option_types[i],
-                    )
-                    for i in range(len(strikes))
-                ])
-                return float(np.sum(weights * (model_prices - market_prices) ** 2))
-            except Exception:
-                return 1e10
+            return self._loss(x, surface)
 
         if self.verbose:
             print(f"Starting differential evolution ({self.model_type} model)...")
@@ -164,3 +140,27 @@ class ContKokholmCalibrator(Calibrator):
             print(f"Final loss: {min(local_result.fun, de_result.fun):.6f}")
 
         return _build_params(best_x, self.model_type), None
+
+    def objective(self, x: np.ndarray, surface: OptionSurface) -> float:
+        """Weighted SSE between model and market prices for parameter vector ``x``."""
+        return self._loss(np.asarray(x, dtype=float), surface)
+
+    def _loss(self, x: np.ndarray, surface: OptionSurface) -> float:
+        try:
+            params = _build_params(x, self.model_type)
+            model_prices = np.array([
+                price_vix_options(
+                    V0=surface.spot,
+                    K=K,
+                    T=T,
+                    r=surface.r,
+                    model_params=params,
+                    pricing_method=self.pricing_method,
+                    option_type=opt,
+                )
+                for K, T, opt in zip(surface.strike, surface.maturity, surface.option_type,
+                                     strict=True)
+            ])
+            return float(np.sum(surface.weight * (model_prices - surface.price) ** 2))
+        except Exception:
+            return 1e10
