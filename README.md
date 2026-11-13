@@ -25,6 +25,9 @@ cd fin_price
 uv sync --extra dev
 ```
 
+The core library needs only numpy, scipy and pydantic. Optional extras:
+`data` (pandas, yfinance for market data), `notebook`, `app`, `ml`.
+
 ### Optional: Rust extension (faster MC simulation)
 
 The jump simulation has a pure-Python fallback that works out of the box.

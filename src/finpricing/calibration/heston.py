@@ -6,10 +6,10 @@ from __future__ import annotations
 import warnings
 
 import numpy as np
-import pandas as pd
 from scipy.optimize import differential_evolution, minimize
 
 from finpricing.calibration.base import Calibrator
+from finpricing.calibration.surface import OptionSurface
 from finpricing.models.heston.pricing import heston_price
 from finpricing.parameters import HestonParameters
 from finpricing.utils.bs_utils import bs_vega, implied_volatility
@@ -54,24 +54,17 @@ class HestonCalibrator(Calibrator):
         self.seed = seed
         self.verbose = verbose
 
-    def _prepare(self, option_surface: pd.DataFrame) -> dict:
-        surface = self._validate_surface(option_surface)
-        if 'S0' not in surface.columns:
-            raise ValueError("option_surface needs an 'S0' column (spot price).")
-        S0 = float(surface['S0'].iloc[0])
-        r = float(surface['r'].iloc[0]) if 'r' in surface.columns else 0.0
-        q = float(surface['q'].iloc[0]) if 'q' in surface.columns else 0.0
-        K = surface['strike'].to_numpy(float)
-        T = surface['maturity'].to_numpy(float)
-        price = surface['price'].to_numpy(float)
-        types = surface['option_type'].to_numpy(str)
-
-        iv = implied_volatility(price, S0, K, T, r, q, option_type=types)
+    def _prepare(self, surface: OptionSurface) -> dict:
+        s = surface
+        iv = implied_volatility(s.price, s.spot, s.strike, s.maturity, s.r, s.q,
+                                option_type=s.option_type)
         if np.any(np.isnan(iv)):
             raise ValueError(f"{int(np.isnan(iv).sum())} quotes violate no-arbitrage bounds.")
-        vega = np.maximum(bs_vega(S0, K, T, r, iv, q), self.min_vega * S0)
-        return {'S0': S0, 'r': r, 'q': q, 'K': K, 'T': T, 'price': price, 'types': types,
-                'iv': iv, 'scale': surface['weight'].to_numpy(float) / vega ** 2}
+        vega = np.maximum(bs_vega(s.spot, s.strike, s.maturity, s.r, iv, s.q),
+                          self.min_vega * s.spot)
+        return {'S0': s.spot, 'r': s.r, 'q': s.q, 'K': s.strike, 'T': s.maturity,
+                'price': s.price, 'types': s.option_type, 'iv': iv,
+                'scale': s.weight / vega ** 2}
 
     def _loss(self, x: np.ndarray, d: dict) -> float:
         try:
@@ -82,24 +75,22 @@ class HestonCalibrator(Calibrator):
         except (ValueError, FloatingPointError):
             return 1e10
 
-    def objective(self, x: np.ndarray, option_surface: pd.DataFrame) -> float:
+    def objective(self, x: np.ndarray, surface: OptionSurface) -> float:
         """Vega-weighted squared error for parameter vector (v0, kappa, theta, xi, rho)."""
-        return self._loss(np.asarray(x, dtype=float), self._prepare(option_surface))
+        return self._loss(np.asarray(x, dtype=float), self._prepare(surface))
 
-    def calibrate(self, option_surface: pd.DataFrame, **kwargs) -> tuple[HestonParameters, dict]:
+    def calibrate(self, surface: OptionSurface, **kwargs) -> tuple[HestonParameters, dict]:
         """
         Fit Heston parameters.
 
         Args:
-            option_surface: DataFrame with columns 'strike', 'maturity', 'price', 'S0'.
-                Optional: 'option_type' (default 'call'), 'weight' (default 1.0),
-                'r' and 'q' (default 0.0).
+            surface: Index option quotes, with spot, rate and dividend yield.
 
         Returns:
             (params, info) where info has 'loss', 'iv_rmse' (model vs market implied
             vol, exact) and 'feller' (whether 2 kappa theta >= xi^2).
         """
-        d = self._prepare(option_surface)
+        d = self._prepare(surface)
         with np.errstate(all='ignore'):
             de = differential_evolution(self._loss, _BOUNDS, args=(d,), maxiter=self.de_maxiter,
                                         popsize=self.de_popsize, seed=self.seed, tol=1e-8,

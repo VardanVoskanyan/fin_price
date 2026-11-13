@@ -1,12 +1,11 @@
 from datetime import datetime
 
 import numpy as np
-import pandas as pd
 import pytest
 from scipy import integrate
 
 from finpricing import HestonModel, HestonParameters, MarketData, OptionParams
-from finpricing.calibration import HestonCalibrator
+from finpricing.calibration import HestonCalibrator, OptionSurface
 from finpricing.models.heston import (
     heston_cf,
     heston_price,
@@ -218,16 +217,12 @@ class TestModel:
 
 def _synthetic_surface(p):
     m = HestonModel(p)
-    rows = []
-    for T in [1 / 12, 0.25, 0.5, 1.0, 2.0]:
-        K = np.array([75, 85, 95, 100, 105, 115, 125.0])
-        types = np.where(S0 * np.exp((R - Q) * T) <= K, 'call', 'put')
-        prices = m.option_price(S0, K, T, R, Q, option_type=types)
-        rows += [dict(strike=k, maturity=T, price=pr, option_type=t)
-                 for k, pr, t in zip(K, prices, types, strict=True)]
-    df = pd.DataFrame(rows)
-    df['S0'], df['r'], df['q'] = S0, R, Q
-    return df
+    K, T = np.meshgrid([75, 85, 95, 100, 105, 115, 125.0], [1 / 12, 0.25, 0.5, 1.0, 2.0])
+    K, T = K.ravel(), T.ravel()
+    types = np.where(S0 * np.exp((R - Q) * T) <= K, 'call', 'put')
+    prices = m.option_price(S0, K, T, R, Q, option_type=types)
+    return OptionSurface(strike=K, maturity=T, price=prices, option_type=types,
+                         spot=S0, r=R, q=Q)
 
 
 class TestCalibration:
@@ -241,14 +236,10 @@ class TestCalibration:
         x[3] *= 1.3
         assert cal.objective(x, surface) > 1e-6
 
-    def test_requires_spot(self):
-        with pytest.raises(ValueError, match="S0"):
-            HestonCalibrator().calibrate(pd.DataFrame({'strike': [100], 'maturity': [1], 'price': [5]}))
-
     def test_rejects_arbitrageable_quotes(self):
-        df = pd.DataFrame({'strike': [100], 'maturity': [1.0], 'price': [150.0], 'S0': [100.0]})
+        surface = OptionSurface(strike=[100], maturity=1.0, price=150.0, spot=100.0)
         with pytest.raises(ValueError, match="no-arbitrage"):
-            HestonCalibrator().calibrate(df)
+            HestonCalibrator().calibrate(surface)
 
     @pytest.mark.slow
     def test_recovers_parameters(self):
