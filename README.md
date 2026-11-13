@@ -8,6 +8,7 @@ A Python library for pricing S&P index options and VIX derivatives, implementing
 | Model | Description |
 |---|---|
 | **Cont-Kokholm** | Simultaneous pricing of S&P and VIX derivatives via forward variance swap dynamics with Merton (Gaussian) or Kou (double-exponential) jumps |
+| **Heston** | Stochastic volatility: Fourier pricing (Lewis integral or FFT), Andersen QE Monte Carlo, closed-form VIX futures and options, calibration |
 | **Black-Scholes** | Analytical call/put pricing, Greeks, and implied-volatility recovery (iterative, Brentq, Newton) |
 
 ---
@@ -45,7 +46,8 @@ uv run maturin develop --release
 ## Running the tests
 
 ```bash
-uv run pytest
+uv run pytest            # fast suite
+uv run pytest -m slow    # end-to-end calibrations (~20 s)
 ```
 
 ---
@@ -84,6 +86,7 @@ cd app && uv run python main.py
 src/finpricing/
 ├── models/
 │   ├── black_scholes/   — BS pricer, implied vol
+│   ├── heston/          — Heston pricing, simulation, VIX
 │   ├── jump_diffusion/  — Merton & Kou jump simulation
 │   └── vix/             — Cont-Kokholm VIX & index option pricing
 ├── calibration/         — Parameter calibration (differential evolution)

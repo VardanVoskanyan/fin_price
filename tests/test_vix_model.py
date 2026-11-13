@@ -74,3 +74,17 @@ class TestIndexOptionPricerSmoke:
         assert prices.shape == (3,)
         assert np.all(prices >= 0), "call prices must be non-negative"
         assert np.all(np.isfinite(prices)), "all prices must be finite"
+
+
+@pytest.mark.parametrize("model_name", ["Merton", "Kou"])
+@pytest.mark.parametrize("r", [0.0, 0.03])
+def test_fourier_methods_agree(model_name, r):
+    """Kar-Madan and Cont-Tankov must give the same VIX option prices."""
+    from finpricing.data.fixtures import KOU_PARAMS, MERTON_PARAMS
+    from finpricing.models.vix.pricing import price_vix_options
+
+    params = MERTON_PARAMS if model_name == "Merton" else KOU_PARAMS
+    for K in [0.16, 0.20, 0.26]:
+        km = price_vix_options(V0, K, TENOR_DATES[2], r, params, 'Kar&Madan')
+        ct = price_vix_options(V0, K, TENOR_DATES[2], r, params, 'Cont&Tankov')
+        assert ct == pytest.approx(km, abs=1e-6)
