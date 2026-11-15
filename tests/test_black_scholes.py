@@ -100,3 +100,26 @@ class TestGreeks:
         gamma_call = (call(s=S + h) - 2 * call() + call(s=S - h)) / h ** 2
         gamma_put = (put(s=S + h) - 2 * put() + put(s=S - h)) / h ** 2
         assert abs(gamma_call - gamma_put) < 1e-4
+
+
+class TestVectorisedTails:
+    """Deep out-of-the-money prices must keep their relative precision."""
+
+    @pytest.mark.parametrize("K", [75.0, 70.0, 65.0])
+    def test_deep_otm_put_matches_direct_formula(self, K):
+        from scipy.stats import norm
+
+        from finpricing.utils.bs_utils import bs_price
+        S, T, r, q, sigma = 100.0, 0.05, 0.02, 0.01, 0.25
+        d1 = (np.log(S / K) + (r - q + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+        d2 = d1 - sigma * np.sqrt(T)
+        direct = K * np.exp(-r * T) * norm.cdf(-d2) - S * np.exp(-q * T) * norm.cdf(-d1)
+        price = bs_price(S, K, T, r, sigma, q, option_type='put')
+        assert price == pytest.approx(direct, rel=1e-9, abs=0)
+
+    def test_deep_otm_put_implied_vol_round_trip(self):
+        from finpricing.utils.bs_utils import bs_price, implied_volatility
+        K = np.array([60.0, 65.0, 70.0])
+        prices = bs_price(100.0, K, 0.05, 0.02, 0.25, option_type='put')
+        iv = implied_volatility(prices, 100.0, K, 0.05, 0.02, option_type='put')
+        np.testing.assert_allclose(iv, 0.25, atol=1e-7)

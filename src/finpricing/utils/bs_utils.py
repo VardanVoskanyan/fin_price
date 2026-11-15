@@ -83,8 +83,10 @@ def bs_price(s, k, t, r, sigma, q=0.0, option_type='call'):
     sqrt_t = np.sqrt(t)
     d1 = (np.log(s / k) + (r - q + 0.5 * sigma ** 2) * t) / (sigma * sqrt_t)
     d2 = d1 - sigma * sqrt_t
-    call = s * np.exp(-q * t) * norm.cdf(d1) - k * np.exp(-r * t) * norm.cdf(d2)
-    put = call - s * np.exp(-q * t) + k * np.exp(-r * t)
+    disc_s, disc_k = s * np.exp(-q * t), k * np.exp(-r * t)
+    # Puts from their own formula, not parity: parity cancels digits for deep OTM puts.
+    call = disc_s * norm.cdf(d1) - disc_k * norm.cdf(d2)
+    put = disc_k * norm.cdf(-d2) - disc_s * norm.cdf(-d1)
     return np.where(np.asarray(option_type) == 'put', put, call)
 
 
