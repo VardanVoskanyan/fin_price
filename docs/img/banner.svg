@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 240" width="960" height="240" role="img" aria-labelledby="t d">
+  <title id="t">FinPricing</title>
+  <desc id="d">FinPricing: option pricing for equity indices and the VIX. An index skew curve and a VIX smile curve drawn behind the name.</desc>
+  <rect width="960" height="240" rx="14" fill="#F7F3EA"/>
+  <g stroke="#E4DDCC" stroke-width="1">
+    <path d="M640 40 V200 M710 40 V200 M780 40 V200 M850 40 V200"/>
+    <path d="M610 70 H920 M610 120 H920 M610 170 H920"/>
+  </g>
+  <!-- index skew: falls left to right -->
+  <path d="M615 58 C 690 78, 730 145, 790 168 S 885 180, 918 176" fill="none" stroke="#3F51B5" stroke-width="5" stroke-linecap="round"/>
+  <!-- VIX smile: rises left to right -->
+  <path d="M615 190 C 690 168, 750 120, 810 98 S 890 74, 918 68" fill="none" stroke="#B4442B" stroke-width="5" stroke-linecap="round"/>
+  <text x="650" y="226" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#6B675C">S&amp;P 500 skew</text>
+  <text x="822" y="226" font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#6B675C">VIX smile</text>
+  <rect x="632" y="216" width="12" height="4" rx="2" fill="#3F51B5"/>
+  <rect x="804" y="216" width="12" height="4" rx="2" fill="#B4442B"/>
+  <text x="48" y="122" font-family="Georgia, 'Times New Roman', serif" font-size="68" fill="#1C1B17" letter-spacing="-1">Fin<tspan fill="#B4442B">Pricing</tspan></text>
+  <text x="52" y="162" font-family="Helvetica, Arial, sans-serif" font-size="19" fill="#1C1B17">Option pricing for equity indices and the VIX</text>
+  <text x="52" y="190" font-family="Helvetica, Arial, sans-serif" font-size="15" fill="#6B675C">Heston · Cont–Kokholm · Black–Scholes, each one cross-checked</text>
+</svg>
