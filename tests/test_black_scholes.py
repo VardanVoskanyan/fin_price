@@ -1,12 +1,14 @@
 import math
-import pytest
+
 import numpy as np
-from finpricing.utils.bs_utils import BlackScholesCalculator
+import pytest
+
 from finpricing.models.black_scholes.implied_volatility import (
     ImpliedVolatilityCalculator,
     ImpliedVolatilityParams,
     Method,
 )
+from finpricing.utils.bs_utils import BlackScholesCalculator
 
 S, K, T, R = 100.0, 100.0, 1.0, 0.05
 

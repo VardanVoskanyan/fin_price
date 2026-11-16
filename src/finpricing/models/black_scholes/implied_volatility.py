@@ -3,9 +3,9 @@ Module for Implied Volatility Calculations
 """
 from dataclasses import dataclass
 from enum import Enum
+
 import numpy as np
-from scipy.optimize import root, brentq, newton
-from typing import Callable
+from scipy.optimize import brentq, newton, root
 
 from finpricing.utils.bs_utils import BlackScholesCalculator
 
@@ -114,9 +114,9 @@ class ImpliedVolatilityCalculator:
         elif params.method == Method.BRENTQ:
             return brentq(value_diff, 1e-12, 5.0, xtol=params.tol)
         elif params.method == Method.NEWTON:
-            fprime: Callable[[float], float] = lambda vol: max(
-                BlackScholesCalculator.vega(params.s, params.k, params.t, params.r, vol), 1e-8
-            )
+            def fprime(vol: float) -> float:
+                return max(BlackScholesCalculator.vega(params.s, params.k, params.t, params.r, vol), 1e-8)
+
             return newton(value_diff, x0, fprime=fprime, tol=params.tol)
         else:
             raise ValueError(f"Method {params.method} not supported")

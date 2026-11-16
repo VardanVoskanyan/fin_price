@@ -4,7 +4,8 @@ Base Models for Parameters and Configuration
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class MarketData(BaseModel):

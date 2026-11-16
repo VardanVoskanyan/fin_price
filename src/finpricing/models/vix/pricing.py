@@ -3,10 +3,11 @@ VIX pricing functions using various methods
 """
 import numpy as np
 from scipy import interpolate
-from finpricing.utils.characteristic_functions import characteristic_function
-from finpricing.utils.fourier import fourier_call_pricer, FourierMethod
-from finpricing.utils.bs_utils import bs_call
+
 from finpricing.models.vix.model import get_sigmas, get_UTm
+from finpricing.utils.bs_utils import bs_call
+from finpricing.utils.characteristic_functions import characteristic_function
+from finpricing.utils.fourier import FourierMethod, fourier_call_pricer
 
 
 def price_vix_options(V0: float, K: float, T: float, r: float, model_params, 
@@ -29,7 +30,8 @@ def price_vix_options(V0: float, K: float, T: float, r: float, model_params,
     moneyness = K/V0
 
     if option_type == 'call':
-        chr_func = lambda x: characteristic_function(x, T, model_params, asset_type='VIX')
+        def chr_func(x):
+            return characteristic_function(x, T, model_params, asset_type='VIX')
         
         # Convert string method to enum
         method = FourierMethod.CONT_TANKOV if pricing_method == 'Cont&Tankov' else FourierMethod.KAR_MADAN
@@ -72,9 +74,9 @@ def price_index_options(S0, Vi_0, strikes, r, tenor_dates, stored_data, b_i, mod
     diff_V, diff_Z, jumps_S, jumps_V, VTi = stored_data
     
     # Compute the sigma_i
-    lmbd, rho = model_params.lmbd, model_params.rho
+    rho = model_params.rho
     
-    from finpricing.parameters import VIXMertonModelParameters, VIXKouModelParameters
+    from finpricing.parameters import VIXKouModelParameters, VIXMertonModelParameters
     match model_params:
         case VIXKouModelParameters():
             constraint_cf = 2 * model_params.lmbd * (model_params.p / model_params.alpha_plus**2 +

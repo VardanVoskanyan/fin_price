@@ -1,7 +1,7 @@
 """
 VIX utility functions
 """
-from finpricing.parameters import VIXMertonModelParameters, VIXKouModelParameters
+from finpricing.parameters import VIXKouModelParameters, VIXMertonModelParameters
 
 
 def vix_drift_coeff(T: float, model_params) -> float:
@@ -15,7 +15,7 @@ def vix_drift_coeff(T: float, model_params) -> float:
     Returns:
         Drift coefficient value
     """
-    from finpricing.models.jump_diffusion.jump_diffusion import merton_drift, kou_drift
+    from finpricing.models.jump_diffusion.jump_diffusion import kou_drift, merton_drift
     
     if isinstance(model_params, VIXMertonModelParameters):
         return merton_drift(T, model_params.omega, model_params.lmbd, 

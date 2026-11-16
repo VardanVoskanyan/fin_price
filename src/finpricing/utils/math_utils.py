@@ -3,6 +3,7 @@
 """
 import numpy as np
 
+
 def generate_grid(start: float, step: float, num: int) -> np.ndarray:
     """Generate a grid of equally spaced values."""
     return np.linspace(start, start + step * (num - 1), num)
