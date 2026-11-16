@@ -58,3 +58,17 @@ def test_vix_model_negative_index_variance_raises():
         model.index_option_pricer(S0=100, strikes=np.array([90.0, 100.0, 110.0]), tenor_index=3)
     with pytest.raises(ValueError, match="sigma"):
         model.get_index_prices(100.0)
+
+
+@pytest.mark.parametrize("T", [1 / 12, 0.25, 0.5])
+def test_fourier_pricers_agree_at_the_kou_calibrator_bound(T):
+    """Kar-Madan's fixed damping is wrong near alpha_plus = 1 (#33); the calibrator must
+    not search there."""
+    from finpricing.models.vix.pricing import price_vix_options
+
+    low, _ = _KOU_BOUNDS[_KOU_NAMES.index("alpha_plus")]
+    params = VIXKouModelParameters(alpha_plus=low)
+    for K in [0.8, 1.0, 1.3, 1.6]:
+        km = price_vix_options(1.0, K, T, 0.0, params, "Kar&Madan")
+        ct = price_vix_options(1.0, K, T, 0.0, params, "Cont&Tankov")
+        assert km == pytest.approx(ct, abs=1e-4)
