@@ -1,14 +1,16 @@
 import math
+from datetime import datetime, timedelta
 
 import numpy as np
 import pytest
 
+from finpricing import BlackScholesModel, MarketData, ModelConfig, OptionParams
 from finpricing.models.black_scholes.implied_volatility import (
     ImpliedVolatilityCalculator,
     ImpliedVolatilityParams,
     Method,
 )
-from finpricing.utils.bs_utils import BlackScholesCalculator
+from finpricing.utils.bs_utils import BlackScholesCalculator, bs_price
 
 S, K, T, R = 100.0, 100.0, 1.0, 0.05
 
@@ -125,3 +127,64 @@ class TestVectorisedTails:
         prices = bs_price(100.0, K, 0.05, 0.02, 0.25, option_type='put')
         iv = implied_volatility(prices, 100.0, K, 0.05, 0.02, option_type='put')
         np.testing.assert_allclose(iv, 0.25, atol=1e-7)
+
+
+class TestBlackScholesModel:
+    """The object interface must agree with bs_price, dividends and puts included."""
+
+    NOW = datetime(2026, 1, 1)
+    SIGMA = 0.2
+
+    def model(self, sigma=SIGMA):
+        return BlackScholesModel(ModelConfig(model_type="bs", numerical_params={"volatility": sigma}))
+
+    def market(self, spot=100.0, r=0.03, q=0.0, now=NOW):
+        return MarketData(spot_price=spot, risk_free_rate=r, dividend_yield=q, timestamp=now)
+
+    def option(self, kind, days=365.25, strike=95.0):
+        return OptionParams(symbol="X", expiry=self.NOW + timedelta(days=days),
+                            strike_price=strike, option_type=kind)
+
+    @pytest.mark.parametrize("kind", ["call", "put"])
+    @pytest.mark.parametrize("q", [0.0, 0.05])
+    def test_price_matches_bs_price(self, kind, q):
+        price = self.model().price(self.market(q=q), self.option(kind))
+        expected = float(bs_price(100.0, 95.0, 1.0, 0.03, self.SIGMA, q=q, option_type=kind))
+        assert price == pytest.approx(expected, rel=1e-12)
+
+    @pytest.mark.parametrize("kind", ["call", "put"])
+    @pytest.mark.parametrize("q", [0.0, 0.05])
+    @pytest.mark.parametrize("days", [365.25, 0.5])
+    def test_greeks_match_finite_differences(self, kind, q, days):
+        model, opt = self.model(), self.option(kind, days=days)
+        greeks = model.greeks(self.market(q=q), opt)
+        T = days / 365.25
+
+        def px(spot=100.0, r=0.03, sigma=self.SIGMA, now=self.NOW):
+            return self.model(sigma).price(self.market(spot=spot, r=r, q=q, now=now), opt)
+
+        hs, hr, hv = 1e-3, 1e-5, 1e-5
+        ht = timedelta(seconds=T * 365.25 * 86400 * 1e-4)          # 0.01% of the option's life
+        dt = ht.total_seconds() / (365.25 * 86400)
+        fd = {
+            "delta": (px(spot=100 + hs) - px(spot=100 - hs)) / (2 * hs),
+            "gamma": (px(spot=100 + hs) - 2 * px() + px(spot=100 - hs)) / hs**2,
+            "vega": (px(sigma=self.SIGMA + hv) - px(sigma=self.SIGMA - hv)) / (2 * hv),
+            "rho": (px(r=0.03 + hr) - px(r=0.03 - hr)) / (2 * hr),
+            # theta = dV/dt in calendar time: moving "now" forward shortens the option
+            "theta": (px(now=self.NOW + ht) - px(now=self.NOW - ht)) / (2 * dt),
+        }
+        for name, value in fd.items():
+            assert greeks[name] == pytest.approx(value, rel=1e-4, abs=1e-6), name
+
+
+class TestInitialGuesses:
+    """Corrado-Miller (1996) is accurate to a few percent within half a standard deviation of the forward."""
+
+    @pytest.mark.parametrize("z", [-0.5, 0.0, 0.5])          # strike = forward * exp(z sigma sqrt(T))
+    @pytest.mark.parametrize("t", [0.25, 1.0, 2.0])
+    @pytest.mark.parametrize("sigma", [0.1, 0.3, 0.5])
+    def test_corrado_miller_near_the_money(self, z, t, sigma):
+        k = 100.0 * math.exp(R * t + z * sigma * math.sqrt(t))
+        params = ImpliedVolatilityParams(call_value=call(k=k, t=t, sigma=sigma), s=100.0, k=k, t=t, r=R)
+        assert ImpliedVolatilityCalculator.corrado_miller_guess(params) == pytest.approx(sigma, rel=0.05)
