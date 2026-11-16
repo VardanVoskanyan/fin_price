@@ -3,6 +3,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/VardanVoskanyan/fin_price/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/VardanVoskanyan/fin_price/ci.yml?branch=main&style=flat-square&label=CI"></a>
   <img alt="Python 3.12+" src="https://img.shields.io/badge/python-3.12%2B-3F51B5?style=flat-square">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-00806A?style=flat-square">
   <img alt="Lint: ruff" src="https://img.shields.io/badge/lint-ruff-B4442B?style=flat-square">
