@@ -3,11 +3,12 @@ Jump-Diffusion Models: Merton and Kou
 """
 import numpy as np
 from scipy.integrate import quad_vec
-from finpricing.parameters import VIXMertonModelParameters, VIXKouModelParameters
+
+from finpricing.parameters import VIXKouModelParameters, VIXMertonModelParameters
 
 try:
-    from finpricing._sim import simul_total_jumps_merton as _rust_merton
     from finpricing._sim import simul_total_jumps_kou as _rust_kou
+    from finpricing._sim import simul_total_jumps_merton as _rust_merton
     _RUST_AVAILABLE = True
 except ImportError:
     _RUST_AVAILABLE = False
@@ -154,7 +155,7 @@ def simul_total_jumps(
 def simul_tenor_jumps(
         model_params: VIXMertonModelParameters | VIXKouModelParameters,
         num_paths: int = 10**5,
-        tenor_dates: np.ndarray = np.arange(0, 1/2, 1/12),
+        tenor_dates: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Simulates the sum of jumps for each tenor period for the index and
@@ -163,13 +164,15 @@ def simul_tenor_jumps(
     Args:
         model_params: Model parameters containing jump process parameters.
         num_paths: Number of Monte Carlo simulation paths.
-        tenor_dates: Sorted numpy array of tenor dates.
+        tenor_dates: Sorted numpy array of tenor dates (default: monthly up to 5 months).
 
     Returns:
         Two 2D arrays of shape (num_paths, len(tenor_dates) - 1):
             - sum_{T_{i-1} <= tau_j < T_i} Y_j
             - sum_{tau_j < T_i} exp(-k2 * (T_i - tau_j)) Y_j
     """
+    if tenor_dates is None:
+        tenor_dates = np.arange(0, 1/2, 1/12)
     k2 = model_params.k2
 
     total_jumps = np.zeros((num_paths, len(tenor_dates) - 1))

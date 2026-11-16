@@ -2,9 +2,11 @@
 Black Scholes model implementations
 """
 from typing import Any
+
 import numpy as np
 from scipy.stats import norm
-from finpricing.base import OptionParams, MarketData, PricingModel, ModelConfig, Greeks
+
+from finpricing.base import Greeks, MarketData, ModelConfig, OptionParams, PricingModel
 from finpricing.utils.bs_utils import BlackScholesCalculator
 
 

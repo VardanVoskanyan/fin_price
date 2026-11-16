@@ -6,8 +6,8 @@ Parameters sourced from Table 2 of:
   and volatility derivatives", Mathematical Finance 23(2), 2013.
 """
 import numpy as np
-from finpricing.parameters import VIXMertonModelParameters, VIXKouModelParameters
 
+from finpricing.parameters import VIXKouModelParameters, VIXMertonModelParameters
 
 # ---------------------------------------------------------------------------
 # Tenor structure used in the paper

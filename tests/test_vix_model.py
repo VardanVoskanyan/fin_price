@@ -1,8 +1,8 @@
-import pytest
 import numpy as np
-from finpricing.models.vix.model import VixModel
-from finpricing.data.fixtures import TENOR_DATES
+import pytest
 
+from finpricing.data.fixtures import TENOR_DATES
+from finpricing.models.vix.model import VixModel
 
 V0 = 0.20   # representative VIX level
 R = 0.02    # risk-free rate

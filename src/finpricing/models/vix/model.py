@@ -2,13 +2,20 @@
 VIX Model implementation for simultaneous pricing of S&P and VIX derivatives
 """
 import numpy as np
-from finpricing.parameters import VIXMertonModelParameters, VIXKouModelParameters
-from finpricing.models.jump_diffusion.jump_diffusion import simul_tenor_jumps, simulate_tenor_diffusions
+
 from finpricing.data.fixtures import (
-    TENOR_DATES, VI_0,
-    MERTON_PARAMS, MERTON_B_I,
-    KOU_PARAMS, KOU_B_I,
+    KOU_B_I,
+    KOU_PARAMS,
+    MERTON_B_I,
+    MERTON_PARAMS,
+    TENOR_DATES,
+    VI_0,
 )
+from finpricing.models.jump_diffusion.jump_diffusion import (
+    simul_tenor_jumps,
+    simulate_tenor_diffusions,
+)
+from finpricing.parameters import VIXKouModelParameters, VIXMertonModelParameters
 
 
 def get_vix_prices(

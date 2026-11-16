@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_PYTHON: "3.12"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --extra dev
+      - run: uv run ruff check .
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --extra dev
+      - name: Fast suite
+        run: uv run pytest
+      - name: End-to-end calibrations
+        run: uv run pytest -m slow
+
+  notebooks:
+    name: Notebooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --extra notebook
+      # Each notebook raises on a failed check. Outputs go to a temporary
+      # directory so the committed notebooks are left as they are.
+      - name: Execute notebooks
+        run: >
+          uv run --with nbconvert jupyter nbconvert --to notebook --execute
+          --ExecutePreprocessor.timeout=900
+          --output-dir "$RUNNER_TEMP/notebooks" notebooks/*.ipynb

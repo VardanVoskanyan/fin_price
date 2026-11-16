@@ -6,8 +6,8 @@ import scipy.integrate as integ
 
 from finpricing.parameters import (
     VIXBlackScholesModelParameters,
-    VIXMertonModelParameters,
     VIXKouModelParameters,
+    VIXMertonModelParameters,
 )
 
 
