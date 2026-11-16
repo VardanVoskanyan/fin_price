@@ -38,7 +38,9 @@ class VIXKouModelParameters(BasicModelParameters):
     k1: float = Field(22.3, gt=0, description="Rate parameter for jump size mean")
     k2: float = Field(2.20, gt=0, description="Rate parameter for jump size variance")
     p: float = Field(0.86, ge=0, le=1, description="Probability of upward jump")
-    alpha_plus: float = Field(4.25, gt=0, description="Rate of upward jumps")
+    alpha_plus: float = Field(
+        4.25, gt=1, description="Rate of upward jumps; E[e^Y] is finite only for alpha_plus > 1"
+    )
     alpha_minus: float = Field(19.9, gt=0, description="Rate of downward jumps")
 
 
