@@ -65,7 +65,10 @@ class HestonModel(PricingModel):
         def px(S_=S, T_=T, r_=r, params=self.params):
             return heston_price(S_, K, T_, r_, params, q=q, option_type=kind)
 
-        h_s, h_t, h_r, h_vol = 1e-3 * S, min(1e-3, T / 2), 1e-4, 1e-4
+        # The theta step scales with T so the central difference stays accurate near
+        # expiry; the floor keeps it above the pricing noise, and T / 2 keeps T - h_t > 0.
+        h_s, h_r, h_vol = 1e-3 * S, 1e-4, 1e-4
+        h_t = max(1e-3 * T, min(1e-6, T / 2))
         base = px()
         up, down = px(S_=S + h_s), px(S_=S - h_s)
         vol = np.sqrt(self.params.v0)

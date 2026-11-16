@@ -49,6 +49,32 @@ def get_vix_prices(
     return VT_i
 
 
+def check_index_variance(Vi0: np.ndarray, constraint_cf: float, b_i: np.ndarray) -> None:
+    """
+    Raise if some σ²_i would be negative.
+
+    σ²_i = (V^i_{T_i} / V^i_0) · (V^i_0 − cf · b_i²) and V^i_{T_i} > 0, so σ²_i has the
+    sign of V^i_0 − cf · b_i² on every path: one negative gap makes the model ill-defined.
+
+    Args:
+        Vi0: Initial variance swap rates, shape (k,)
+        constraint_cf: Scalar coefficient from jump distribution moments, ∫ x² ν(dx)
+        b_i: Index jump exposure coefficients, shape (k,)
+
+    Raises:
+        ValueError: if V^i_0 − cf · b_i² < 0 for some i.
+    """
+    gap = np.asarray(Vi0, dtype=float) - constraint_cf * np.asarray(b_i, dtype=float) ** 2
+    bad = np.flatnonzero(gap < 0)
+    if bad.size:
+        raise ValueError(
+            f"sigma_i^2 < 0 for tenor periods {bad.tolist()}: V^i_0 - cf * b_i^2 = "
+            f"{np.round(gap[bad], 6).tolist()} with cf = {constraint_cf:.6g}. The index jumps "
+            "carry more variance than the variance swap rate allows; reduce the jump second "
+            "moment or b_i."
+        )
+
+
 def get_sigmas(
     Vi0: np.ndarray,
     VTi: np.ndarray,
@@ -66,7 +92,11 @@ def get_sigmas(
 
     Returns:
         sigmas_sq: shape (num_paths, k)
+
+    Raises:
+        ValueError: if the parameters make some σ²_i negative (see ``check_index_variance``).
     """
+    check_index_variance(Vi0, constraint_cf, b_i)
     return VTi - constraint_cf * (VTi / Vi0) * (b_i ** 2)
 
 

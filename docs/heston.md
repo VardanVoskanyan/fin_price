@@ -83,9 +83,34 @@ $\psi = s^2/m^2$:
 - $\psi > 1.5$: a point mass at zero plus an exponential tail, sampled by inverting its CDF.
 
 The log price uses the scheme's central discretisation ($\gamma_1 = \gamma_2 = \tfrac12$),
-which correlates its Gaussian with the variance increment. QE stays accurate with a few
-dozen steps per year even when Feller fails, where Euler schemes are biased.
-`simulate_heston` returns `(times, S, v)` with paths in rows.
+which correlates its Gaussian with the variance increment:
+
+$$
+\ln S_{t+\Delta} = \ln S_t + (r-q)\Delta + K_0^* + K_1 v_t + K_2 v_{t+\Delta}
++ \sqrt{K_3 v_t + K_4 v_{t+\Delta}}\, Z.
+$$
+
+**Martingale correction (QE-M).** With the plain drift constant $K_0$ the discrete
+forward is biased when steps are coarse (about 1% at $T = 5$ with 4 steps for
+$\xi = 1.5$, $\rho = -0.9$). Following Andersen §4.3, $K_0$ is replaced per path and step
+by
+
+$$
+K_0^* = -\ln \mathbb{E}\left[e^{A v_{t+\Delta}} \mid v_t\right] - \left(K_1 + \tfrac12 K_3\right) v_t,
+\qquad A = K_2 + \tfrac12 K_4,
+$$
+
+so that $\mathbb{E}[S_{t+\Delta} \mid S_t, v_t] = S_t e^{(r-q)\Delta}$ exactly. The
+expectation is taken under the distribution QE actually samples:
+
+- quadratic branch: $\dfrac{\exp\left(A b^2 a / (1 - 2Aa)\right)}{\sqrt{1 - 2Aa}}$, finite for $A < 1/(2a)$;
+- exponential branch: $p + \dfrac{\beta(1-p)}{\beta - A}$, finite for $A < \beta$.
+
+$A$ is negative for the usual $\rho < 0$, so both always hold. Where one fails (large
+positive $\rho$ with coarse steps) that path keeps the uncorrected $K_0$ for that step.
+
+QE stays accurate with a few dozen steps per year even when Feller fails, where Euler
+schemes are biased. `simulate_heston` returns `(times, S, v)` with paths in rows.
 
 ## VIX
 
@@ -108,6 +133,13 @@ So VIX futures $\mathbb{E}[\mathrm{VIX}_T]$ and calls $e^{-rT}\mathbb{E}[(\mathr
 are one-dimensional integrals against the $\chi'^2$ density (`vix_future`,
 `vix_option_price`). VIX puts use parity with the future. VIX levels are in decimal units
 (0.20, not 20).
+
+The integrals run between the $10^{-12}$ and $1 - 10^{-12}$ quantiles of $X$, with a
+breakpoint at its mean. When $\lambda$ is large (small $\xi$ or short $T$) the density is a
+narrow spike, which an integral over $[0, \infty)$ misses, and scipy's density is NaN far out
+in its left tail. Above $\lambda = 10^8$ the skewness of $X$, about $3/\sqrt{\lambda}$, is
+negligible, so $v_T$ is taken as normal with its exact mean and variance. $T = 0$ gives the
+spot VIX, and $T < 0$ raises `ValueError`.
 
 Heston cannot match the VIX smile and the S&P smile at the same time; the VIX smile it
 produces slopes the wrong way. That gap is what the Cont–Kokholm model addresses, and the
