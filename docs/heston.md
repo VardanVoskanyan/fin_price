@@ -109,6 +109,13 @@ are one-dimensional integrals against the $\chi'^2$ density (`vix_future`,
 `vix_option_price`). VIX puts use parity with the future. VIX levels are in decimal units
 (0.20, not 20).
 
+The integrals run between the $10^{-12}$ and $1 - 10^{-12}$ quantiles of $X$, with a
+breakpoint at its mean. When $\lambda$ is large (small $\xi$ or short $T$) the density is a
+narrow spike, which an integral over $[0, \infty)$ misses, and scipy's density is NaN far out
+in its left tail. Above $\lambda = 10^8$ the skewness of $X$, about $3/\sqrt{\lambda}$, is
+negligible, so $v_T$ is taken as normal with its exact mean and variance. $T = 0$ gives the
+spot VIX, and $T < 0$ raises `ValueError`.
+
 Heston cannot match the VIX smile and the S&P smile at the same time; the VIX smile it
 produces slopes the wrong way. That gap is what the Cont–Kokholm model addresses, and the
 Heston VIX functions are mainly useful for showing it.
