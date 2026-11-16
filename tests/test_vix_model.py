@@ -38,8 +38,8 @@ class TestVixOptionPricerSmoke:
 
 class TestVixCallPutParity:
     """
-    The Fourier put is defined as: P = exp(-rT)*K + C - V0
-    So C - P = V0 - exp(-rT)*K exactly (no Monte Carlo variance).
+    V0 is the VIX future, a martingale, and prices are discounted at r, so
+    C - P = exp(-rT) * (V0 - K) exactly (no Monte Carlo variance).
     """
 
     @pytest.mark.parametrize("model_name", ["Merton", "Kou"])
@@ -49,10 +49,17 @@ class TestVixCallPutParity:
         model = VixModel(model_type=model_name)
         call = model.vix_option_pricer(V0, K=K, T=T, r=R, option_type="call")
         put = model.vix_option_pricer(V0, K=K, T=T, r=R, option_type="put")
-        expected = V0 - np.exp(-R * T) * K
+        expected = np.exp(-R * T) * (V0 - K)
         assert abs(call - put - expected) < 1e-10, (
             f"C - P = {call - put:.6f}, expected {expected:.6f}"
         )
+
+
+    @pytest.mark.parametrize("model_name", ["Merton", "Kou"])
+    def test_deep_otm_put_nonnegative_with_positive_rate(self, model_name):
+        model = VixModel(model_type=model_name)
+        put = model.vix_option_pricer(V0, K=0.02, T=0.25, r=0.05, option_type="put")
+        assert put >= -1e-6          # the Fourier call's own accuracy; was -2.5e-3 with stock parity
 
 
 class TestIndexOptionPricerSmoke:
@@ -88,3 +95,39 @@ def test_fourier_methods_agree(model_name, r):
         km = price_vix_options(V0, K, TENOR_DATES[2], r, params, 'Kar&Madan')
         ct = price_vix_options(V0, K, TENOR_DATES[2], r, params, 'Cont&Tankov')
         assert ct == pytest.approx(km, abs=1e-6)
+
+
+class TestIndexPuts:
+    """Index puts must satisfy put-call parity path by path: C - P = S0 E[U] - K exp(-rT)."""
+
+    @pytest.fixture(scope="class")
+    def prices(self):
+        np.random.seed(11)
+        model = VixModel(model_type="Merton")
+        model.store_tenor_data(num_paths=20_000)
+        strikes = np.array([80.0, 90.0, 100.0, 110.0, 120.0])
+        calls = model.index_option_pricer(S0=100.0, strikes=strikes, tenor_index=3, r=0.03)
+        puts = model.index_option_pricer(S0=100.0, strikes=strikes, tenor_index=3, r=0.03,
+                                         option_type="put")
+        return model, strikes, calls, puts
+
+    def test_parity_across_strikes_is_exact(self, prices):
+        model, strikes, calls, puts = prices
+        T = model.tenor_dates[3]
+        spread = calls - puts                      # S0 E[U] - K exp(-rT); E[U] cancels below
+        np.testing.assert_allclose(spread - spread[0], -(strikes - strikes[0]) * np.exp(-0.03 * T),
+                                   atol=1e-8)
+
+    def test_parity_level(self, prices):
+        model, strikes, calls, puts = prices
+        T = model.tenor_dates[3]
+        np.testing.assert_allclose(calls - puts, 100.0 - strikes * np.exp(-0.03 * T), atol=1.0)
+
+    def test_puts_increase_with_strike(self, prices):
+        *_, puts = prices
+        assert np.all(np.diff(puts) > 0)
+
+    def test_unknown_option_type_raises(self, prices):
+        model, strikes, *_ = prices
+        with pytest.raises(ValueError):
+            model.index_option_pricer(S0=100.0, strikes=strikes, tenor_index=3, option_type="Put")

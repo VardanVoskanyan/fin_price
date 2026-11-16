@@ -6,6 +6,8 @@ Two methods:
   Accurate at arbitrary strikes and vectorised over strikes; the default.
 - 'fft':   the library's Kar-Madan / Cont-Tankov FFT pricer, interpolated to the strikes.
   Prices a whole strike grid at once, but is less accurate between grid points.
+  Kar-Madan needs E[S_T^(1+alpha)] < inf; alpha is chosen from the moment explosion
+  time unless given, and an alpha past the explosion raises.
 """
 import numpy as np
 from scipy.interpolate import CubicSpline
@@ -53,6 +55,54 @@ def _lewis_calls(S0: float, K: np.ndarray, T: float, r: float, q: float,
     integral = integrand @ weights                               # (M,)
 
     return S0 * np.exp(-q * T) - np.sqrt(S0 * K) * np.exp(-0.5 * (r + q) * T) * integral / np.pi
+
+
+def moment_explosion_time(omega: float, params: HestonParameters) -> float:
+    """
+    Time T* after which E[S_T^omega] is infinite (Andersen & Piterbarg, 2007).
+
+    The moment is exp(A + B v0) where B solves the Riccati equation
+    B' = xi^2 B^2 / 2 + (rho xi omega - kappa) B + omega (omega - 1) / 2, B(0) = 0.
+    It blows up in finite time only for omega outside [0, 1].
+    """
+    if 0.0 <= omega <= 1.0:
+        return np.inf
+    b = params.rho * params.xi * omega - params.kappa
+    disc = b ** 2 - params.xi ** 2 * omega * (omega - 1)
+    if disc >= 0:
+        if b < 0:
+            return np.inf
+        root = np.sqrt(disc)
+        return 2 / b if root < 1e-12 * b else float(np.log((b + root) / (b - root)) / root)
+    gamma = np.sqrt(-disc)
+    if b == 0:
+        return float(np.pi / gamma)
+    return float(2 / gamma * (np.pi * (b < 0) + np.arctan(gamma / b)))
+
+
+# Kar-Madan damping: the largest alpha whose (1 + alpha) moment stays finite until well
+# past the maturity. A finer grid than the generic default keeps small alphas accurate.
+_KAR_MADAN_ALPHAS = (0.75, 0.5, 0.4, 0.3, 0.2, 0.1)
+_EXPLOSION_MARGIN = 2.0
+_KAR_MADAN_GRID = {"N": 16384, "Delta": 0.02}
+
+
+def _kar_madan_kwargs(T: float, params: HestonParameters, fft_kwargs: dict) -> dict:
+    kwargs = {**_KAR_MADAN_GRID, **fft_kwargs}
+    if "alpha" in fft_kwargs:
+        t_star = moment_explosion_time(1 + fft_kwargs["alpha"], params)
+        if t_star <= T:
+            raise ValueError(
+                f"Kar-Madan with alpha={fft_kwargs['alpha']} needs E[S_T^{1 + fft_kwargs['alpha']:g}], "
+                f"but that moment is infinite from T = {t_star:.3g}; use a smaller alpha or "
+                "method='lewis'.")
+        return kwargs
+    for alpha in _KAR_MADAN_ALPHAS:
+        if moment_explosion_time(1 + alpha, params) > _EXPLOSION_MARGIN * T:
+            return {**kwargs, "alpha": alpha}
+    raise ValueError(
+        f"Every Kar-Madan damping needs a moment of S_T that is infinite or close to it at "
+        f"T = {T:g}; use method='lewis' or 'fft-ct'.")
 
 
 def _fft_calls(S0: float, K: np.ndarray, T: float, r: float, q: float,
@@ -110,8 +160,8 @@ def heston_price(
             case 'lewis':
                 calls[idx] = _lewis_calls(S0, K_arr[idx], T_i, r, q, params)
             case 'fft':
-                calls[idx] = _fft_calls(S0, K_arr[idx], T_i, r, q, params,
-                                        FourierMethod.KAR_MADAN, **fft_kwargs)
+                calls[idx] = _fft_calls(S0, K_arr[idx], T_i, r, q, params, FourierMethod.KAR_MADAN,
+                                        **_kar_madan_kwargs(T_i, params, fft_kwargs))
             case 'fft-ct':
                 calls[idx] = _fft_calls(S0, K_arr[idx], T_i, r, q, params,
                                         FourierMethod.CONT_TANKOV, **fft_kwargs)

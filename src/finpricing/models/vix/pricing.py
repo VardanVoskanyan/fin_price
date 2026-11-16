@@ -5,7 +5,7 @@ import numpy as np
 from scipy import interpolate
 
 from finpricing.models.vix.model import get_sigmas, get_UTm
-from finpricing.utils.bs_utils import bs_call
+from finpricing.utils.bs_utils import bs_call, bs_put
 from finpricing.utils.characteristic_functions import characteristic_function
 from finpricing.utils.fourier import FourierMethod, fourier_call_pricer
 
@@ -43,8 +43,10 @@ def price_vix_options(V0: float, K: float, T: float, r: float, model_params,
         return V0*f(moneyness)
 
     elif option_type == 'put':
+        # V0 is the VIX future (a martingale) and prices are discounted at r:
+        # C - P = exp(-rT) (V0 - K).
         call_price = price_vix_options(V0, K, T, r, model_params, pricing_method, 'call')
-        return np.exp(-r*T)*K + call_price - V0
+        return call_price - np.exp(-r*T) * (V0 - K)
     
     else:
         raise ValueError(f"Unknown option type: {option_type}")
@@ -69,6 +71,8 @@ def price_index_options(S0, Vi_0, strikes, r, tenor_dates, stored_data, b_i, mod
     Returns:
         Array of option prices for given strikes
     """
+    if option_type not in ('call', 'put'):
+        raise ValueError(f"option_type must be 'call' or 'put', got {option_type!r}")
     k = len(tenor_dates) -1
     # Get the stored data
     diff_V, diff_Z, jumps_S, jumps_V, VTi = stored_data
@@ -92,12 +96,7 @@ def price_index_options(S0, Vi_0, strikes, r, tenor_dates, stored_data, b_i, mod
 
     sigma_star = np.sqrt((1 - rho**2)*np.sum(sigmas_sq[:,:k]*np.diff(tenor_dates[:k+1]), axis=1)/tenor_dates[k])
 
-    # Compute the BS call prices with spot U and volatility sigma*
-    C_bs = np.zeros(len(strikes))
-    
-    for i in range(len(strikes)):
-        # Average the BS call price at U_Tm over all simulations
-        C_bs[i] = np.mean(bs_call(S0*U_Tm, strikes[i], tenor_dates[k], r, sigma_star))
-
-    # Return the results
-    return C_bs
+    # Conditional on each path the index is lognormal: average the Black-Scholes
+    # price with spot S0 U and volatility sigma*.
+    bs = bs_call if option_type == 'call' else bs_put
+    return np.array([np.mean(bs(S0*U_Tm, K, tenor_dates[k], r, sigma_star)) for K in strikes])

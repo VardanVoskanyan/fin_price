@@ -14,6 +14,7 @@ from finpricing.models.heston import (
     vix_option_price,
     vix_spot,
 )
+from finpricing.models.heston.pricing import moment_explosion_time
 from finpricing.models.heston.vix import _variance_law, vix_coefficients
 from finpricing.utils.bs_utils import bs_price
 
@@ -247,3 +248,38 @@ class TestCalibration:
         for name in ['v0', 'kappa', 'theta', 'xi', 'rho']:
             assert getattr(fitted, name) == pytest.approx(getattr(self.TRUE, name), rel=1e-3)
         assert info['iv_rmse'] < 1e-5
+
+
+# xi large and rho > 0: E[S_T^1.75] is infinite from T* ~ 1.64 (Andersen & Piterbarg, 2007).
+EXPLODING = HestonParameters(v0=0.04, kappa=1.0, theta=0.04, xi=1.5, rho=0.5)
+
+
+class TestMomentExplosion:
+    def _riccati_blow_up(self, omega, p):
+        """Integrate the moment Riccati ODE until psi blows up: an independent T*."""
+        def rhs(t, psi):
+            return 0.5 * p.xi**2 * psi**2 + (p.rho * p.xi * omega - p.kappa) * psi + 0.5 * omega * (omega - 1)
+        event = lambda t, psi: psi[0] - 1e8          # noqa: E731
+        event.terminal = True
+        sol = integrate.solve_ivp(rhs, (0, 50), [0.0], events=event, rtol=1e-10, atol=1e-12)
+        return sol.t_events[0][0] if sol.t_events[0].size else np.inf
+
+    @pytest.mark.parametrize("p", PARAM_SETS + [EXPLODING])
+    @pytest.mark.parametrize("omega", [1.5, 1.75, 2.0])
+    def test_matches_riccati_ode(self, p, omega):
+        expected = self._riccati_blow_up(omega, p)
+        got = moment_explosion_time(omega, p)
+        if np.isinf(expected):
+            assert got > 50
+        else:
+            assert got == pytest.approx(expected, rel=1e-4)
+
+    def test_kar_madan_past_the_explosion(self):
+        K = np.array([80, 90, 100, 110, 120.0])
+        lewis = heston_price(S0, K, 2.0, R, EXPLODING, q=Q)
+        fft = heston_price(S0, K, 2.0, R, EXPLODING, q=Q, method="fft")
+        np.testing.assert_allclose(fft, lewis, atol=1e-3)
+
+    def test_explicit_alpha_past_the_explosion_raises(self):
+        with pytest.raises(ValueError, match="moment"):
+            heston_price(S0, 100.0, 2.0, R, EXPLODING, q=Q, method="fft", alpha=0.75)

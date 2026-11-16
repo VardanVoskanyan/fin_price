@@ -45,13 +45,18 @@ class ImpliedVolatilityCalculator:
     @staticmethod
     def corrado_miller_guess(params: ImpliedVolatilityParams) -> float:
         """
-        Calculate an initial guess for implied volatility using the Corrado-Miller approximation.
+        Calculate an initial guess for implied volatility using the Corrado-Miller (1996)
+        approximation:
+
+            sigma ~ sqrt(2 pi) / (S + X) * [C - (S - X)/2 + sqrt((C - (S - X)/2)^2 - (S - X)^2 / pi)] / sqrt(T)
+
+        with X = K exp(-rT). The square-root argument is clipped at 0 far from the money.
         """
         exp1 = params.s - params.k * np.exp(-params.r * params.t)
         exp2 = np.sqrt(2 * np.pi) / (params.s + params.k * np.exp(-params.r * params.t))
+        centred = params.call_value - exp1 / 2
 
-        guess = (exp2 + (params.call_value - exp1 / 2) +
-                 np.sqrt((params.call_value - exp1 / 2) ** 2 - exp1 ** 2 / np.pi)) / np.sqrt(params.t)
+        guess = exp2 * (centred + np.sqrt(max(0.0, centred ** 2 - exp1 ** 2 / np.pi))) / np.sqrt(params.t)
 
         return max(guess, 1e-8)
 
