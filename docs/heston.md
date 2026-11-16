@@ -45,6 +45,14 @@ $$
 
 $X_T$ is the martingale part of the log price, so $\varphi(-i) = 1$ (`heston_cf`).
 
+As $\xi \to 0$, $\beta - d = O(\xi^2)$ and is then divided by $\xi^2$, so subtracting
+$d$ from $\beta$ loses all precision. `heston_cf` uses
+$\beta - d = -\xi^2(iu + u^2)/(\beta + d)$ instead (and the same identity the other way
+round where $\beta + d$ is the small one), writes $\ln\frac{1 - g e^{-dT}}{1 - g}$ as
+$\ln(1 + x)$ with $x = (\beta - d)(1 - e^{-dT})/(2d)$, and evaluates $\ln(1 + x)$ and
+$1 - e^{-dT}$ without cancellation. Prices then reach the Black–Scholes limit to
+$10^{-8}$ even at $\xi = 10^{-8}$.
+
 ## Vanilla options
 
 `heston_price(..., method=...)`:
@@ -58,18 +66,46 @@ C = S_0 e^{-qT} - \frac{\sqrt{S_0 K}\, e^{-(r+q)T/2}}{\pi}
 $$
 
 The integral is cut off where the integrand's envelope falls below $10^{-14}$, found by
-probing $\varphi$ numerically, because the decay rate changes from Gaussian to exponential
-(rate about $1/\xi$) as $u$ grows. It is computed with 16-point Gauss–Legendre panels
-narrow enough to resolve the oscillation $e^{iu\ln(F/K)}$. All strikes of one maturity
-share the same nodes. The result agrees with an independent implementation to about
-$10^{-8}$.
+probing $\varphi$ numerically up to $u = 10^8$, because the decay rate changes from
+Gaussian to exponential as $u$ grows. For large $u$,
+$\ln\varphi(u) \approx c - \lambda u$ with
+$\lambda = (v_0 + \kappa\theta T)(\sqrt{1-\rho^2} + i\rho)/\xi$, which decays very slowly
+as $\rho \to \pm 1$: at the corner of the calibrator's bounds the cutoff is near
+$u = 10^6$. It is computed with 16-point Gauss–Legendre panels narrow enough to resolve
+the oscillation $e^{iu\ln(F/K)}$, the first one split towards the poles of
+$1/(u^2 + \frac14)$ at $\pm i/2$. All strikes of one maturity share the same nodes, and
+strikes are processed in blocks to bound memory.
+
+When the cutoff is beyond $u = 10^4$, the panels stop at the first probe point $U$ from
+which $\varphi(U - \frac i2)\, e^{-\lambda(u - U) + a(1/u - 1/U)}$, with $a$ fitted to
+the slope of $\ln\varphi$ at $U$, matches $\varphi$ at every later probe point. The rest
+of the integral is done in closed form, with exponential integrals $E_n$. If no such $U$
+exists below $u = 10^5$ (only near $\rho = \pm 1$ exactly), the panels stop at
+$10^5$ and a `RuntimeWarning` says the price may be inaccurate.
+
+The result agrees with an independent implementation to about $10^{-10}$.
 
 **`'fft'`, `'fft-ct'`.** The library's Kar–Madan and Cont–Tankov FFT pricers (shared with
 Cont–Kokholm), applied to the CF of $\ln(S_T/S_0)$ and interpolated to the strikes with a
 cubic spline. They price a whole strike grid at once but are less accurate between grid
-points.
+points. The grid depends on the maturity: the integration range $N\Delta$ is four times
+the point where the transformed CF falls below $10^{-12}$ (and at least $2\pi/0.02$). The
+log-strike spacing $2\pi/(N\Delta)$ therefore shrinks with the width of the smile, which
+a fixed grid cannot resolve at short maturities. Kar–Madan's damping $\alpha$ is the
+largest of 0.75, 0.5, …, 0.1 whose moment $\mathbb{E}[S_T^{1+\alpha}]$ stays finite
+until twice the maturity, and $\Delta = \alpha/10$ keeps the damped price
+$e^{\alpha k}C(k)$ negligible at the ends of the log-strike range $2\pi/\Delta$.
+Cont–Tankov uses $\Delta = 0.17$. Both match Lewis to $10^{-3}$ relative at one-day
+maturities, and much better at longer ones.
 
-Puts use put–call parity, $P = C - S_0 e^{-qT} + K e^{-rT}$.
+`'fft'` accepts `N`, `Delta` and `alpha`, `'fft-ct'` accepts `N`, `Delta` and `sigma`
+(an even `N`), and `'lewis'` takes no extra arguments; anything else raises `TypeError`.
+
+Puts use put–call parity, $P = C - S_0 e^{-qT} + K e^{-rT}$. Prices are floored at the
+no-arbitrage lower bounds $\max(S_0 e^{-qT} - K e^{-rT}, 0)$ for calls and
+$\max(K e^{-rT} - S_0 e^{-qT}, 0)$ for puts; quadrature noise (about $10^{-12}$ for
+Lewis, more for the FFT methods) would otherwise leave some far out-of-the-money prices
+slightly negative.
 `HestonModel.implied_vol` returns the Black–Scholes implied volatility of out-of-the-money
 options, which is the model smile.
 
