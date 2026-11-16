@@ -16,6 +16,13 @@ from finpricing.parameters import HestonParameters
 
 VIX_TAU = 30 / 365
 
+# Probability mass left out at each end of the variance law.
+_TAIL = 1e-12
+# Above this non-centrality v_T is treated as normal. The skewness of the non-central chi^2
+# is about 3 / sqrt(nc), so the error is far below quadrature tolerance, and scipy's ncx2
+# loses its quantiles and density somewhere above 1e10.
+_NORMAL_NC = 1e8
+
 
 def vix_coefficients(params: HestonParameters, tau: float = VIX_TAU) -> tuple[float, float]:
     """(a, b) such that VIX_t^2 = a v_t + b."""
@@ -31,34 +38,75 @@ def vix_spot(params: HestonParameters) -> float:
 
 def _variance_law(T: float, p: HestonParameters):
     """v_T = c * X with X ~ non-central chi^2(df, nc)."""
-    c = p.xi ** 2 * (1 - np.exp(-p.kappa * T)) / (4 * p.kappa)
+    c = p.xi ** 2 * -np.expm1(-p.kappa * T) / (4 * p.kappa)
     df = 4 * p.kappa * p.theta / p.xi ** 2
     nc = p.v0 * np.exp(-p.kappa * T) / c
     return c, stats.ncx2(df, nc)
 
 
-def _expect(payoff, T: float, p: HestonParameters, lower_vix: float = 0.0) -> float:
-    """E[payoff(VIX_T)] integrated over the non-central chi^2 law, from VIX_T >= lower_vix."""
-    a, b = vix_coefficients(p)
-    c, law = _variance_law(T, p)
-    x_lo = max((lower_vix ** 2 - b) / (a * c), 0.0)
-    x_hi = law.ppf(1 - 1e-12)
-    if x_lo >= x_hi:
-        return 0.0
-    mid = min(max(law.mean(), x_lo), x_hi)
-    points = [mid] if x_lo < mid < x_hi else None
+def _variance_moments(T: float, p: HestonParameters) -> tuple[float, float]:
+    """Mean and standard deviation of v_T, computed directly so they stay finite as T -> 0."""
+    e = np.exp(-p.kappa * T)
+    one_minus_e = -np.expm1(-p.kappa * T)
+    mean = p.v0 * e + p.theta * one_minus_e
+    var = p.xi ** 2 * one_minus_e * (p.v0 * e + p.theta * one_minus_e / 2) / p.kappa
+    return mean, np.sqrt(var)
 
-    def integrand(x):
-        return payoff(np.sqrt(a * c * x + b)) * law.pdf(x)
 
-    value, _ = integrate.quad(integrand, x_lo, x_hi, points=points, limit=500,
-                              epsabs=1e-12, epsrel=1e-10)
+def _quad(f, lo: float, hi: float, mid: float) -> float:
+    points = [mid] if lo < mid < hi else None
+    value, _ = integrate.quad(f, lo, hi, points=points, limit=500, epsabs=1e-12, epsrel=1e-10)
     return value
+
+
+def _expect(payoff, T: float, p: HestonParameters, lower_vix: float = 0.0) -> float:
+    """
+    E[payoff(VIX_T)] over the law of v_T, restricted to VIX_T >= lower_vix.
+
+    The integral runs over the bulk of the law, between its 1e-12 and 1 - 1e-12 quantiles,
+    with a breakpoint at the mean: for large non-centrality (small xi or short T) the
+    density is a narrow spike that quad would miss over [0, inf), and scipy's density is
+    NaN far out in its left tail. Very large non-centrality uses a normal law for v_T, and
+    a degenerate law falls back to the deterministic VIX.
+    """
+    a, b = vix_coefficients(p)
+
+    def vix(v):
+        return np.sqrt(max(a * v + b, 0.0))
+
+    v_lo = (lower_vix ** 2 - b) / a
+    mean, sd = _variance_moments(T, p)
+    if not sd > 0:
+        return payoff(vix(mean)) if mean >= v_lo else 0.0
+
+    c, law = _variance_law(T, p)
+    _, nc = law.args
+    if nc <= _NORMAL_NC:
+        x_lo = max(v_lo / c, law.ppf(_TAIL), 0.0)
+        x_hi = law.ppf(1 - _TAIL)
+        if np.isfinite(x_lo) and np.isfinite(x_hi):
+            if x_lo >= x_hi:
+                return 0.0
+
+            def integrand(x):
+                density = law.pdf(x)
+                return payoff(vix(c * x)) * density if np.isfinite(density) else 0.0
+
+            return _quad(integrand, x_lo, x_hi, law.mean())
+
+    # Normal approximation, in standard units z = (v - mean) / sd.
+    z_hi = stats.norm.isf(_TAIL)
+    z_lo = max((v_lo - mean) / sd, -z_hi)
+    if z_lo >= z_hi:
+        return 0.0
+    return _quad(lambda z: payoff(vix(mean + sd * z)) * stats.norm.pdf(z), z_lo, z_hi, 0.0)
 
 
 def vix_future(T: float, params: HestonParameters) -> float:
     """VIX futures price E[VIX_T] (decimal units)."""
-    if T <= 0:
+    if T < 0:
+        raise ValueError("Maturity must be non-negative.")
+    if T == 0:
         return vix_spot(params)
     return _expect(lambda vix: vix, T, params)
 
