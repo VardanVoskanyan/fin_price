@@ -61,6 +61,10 @@ With jump intensity $\lambda$, $\nu(dx) = \lambda f(x)\,dx$ where
 Jumps in variance are mostly upward ($m > 0$, or $p$ close to 1), which produces the
 upward-sloping VIX smile.
 
+For Kou, $\mathbb{E}[e^{Y}]$ is finite only when $\alpha_+ > 1$, and the drift above needs
+it (the integrand uses $c \le 1$). `VIXKouModelParameters` rejects $\alpha_+ \le 1$, and the
+calibrator searches $\alpha_+ \ge 1.05$.
+
 ## VIX options
 
 The VIX at $T$ is approximated by the square root of the variance swap rate starting at
@@ -94,8 +98,13 @@ where $W \perp Z$ and $\tilde J$ is the compensated measure. $\sigma_i$ is chose
 the total quadratic variation over the period matches the variance swap rate:
 
 $$
-\sigma_i^2 = V^i_{T_i} - \frac{V^i_{T_i}}{V^i_0}\, b_i^2 \int x^2 \nu(dx).
+\sigma_i^2 = V^i_{T_i} - \frac{V^i_{T_i}}{V^i_0}\, b_i^2 \int x^2 \nu(dx)
+  = \frac{V^i_{T_i}}{V^i_0}\left( V^i_0 - b_i^2 \int x^2 \nu(dx) \right).
 $$
+
+Since $V^i_{T_i} > 0$, $\sigma_i^2$ has the sign of $V^i_0 - b_i^2 \int x^2 \nu(dx)$ on every
+path. The model needs this to be non-negative for every period; otherwise `get_sigmas`
+(and so `price_index_options` and `VixModel.get_index_prices`) raises `ValueError`.
 
 Conditional on the paths of $Z$ and $J$, $\ln S_{T_k}$ is Gaussian. So an index call is a
 Black–Scholes price averaged over simulated variance paths:
@@ -108,6 +117,18 @@ $$
 
 where $U_{T_k}$ collects the drift, the $\rho\,dZ$ part and the index jumps
 (`get_UTm`). Only $Z$ and the jumps are simulated; the $W$ part is integrated exactly.
+
+`simulate_tenor_diffusions` draws, for each period $[T_{i-1}, T_i]$ of length
+$\Delta_i$, the Gaussian pair $I_i = \int_{T_{i-1}}^{T_i} e^{-k_1 (T_i - s)}\,dZ_s$ and
+$\Delta Z_i$, with
+
+$$
+\mathrm{Var}(I_i) = \frac{1 - e^{-2 k_1 \Delta_i}}{2 k_1}, \qquad
+\mathrm{Cov}(I_i, \Delta Z_i) = \frac{1 - e^{-k_1 \Delta_i}}{k_1},
+$$
+
+and builds $\int_0^{T_i} e^{-k_1 (T_i - s)}\,dZ_s = e^{-k_1 \Delta_i} (\cdot)_{i-1} + I_i$.
+Only $e^{-k_1 \Delta}$ appears, so nothing overflows at long tenors or large $k_1$.
 `VixModel.store_tenor_data` simulates and caches these paths once;
 `index_option_pricer` reuses them for every strike.
 

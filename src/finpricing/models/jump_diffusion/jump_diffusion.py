@@ -206,15 +206,25 @@ def simulate_tenor_diffusions(num_paths: int, tenor_dates: np.ndarray, k1: float
             - dZ: Increments of the diffusion controlling the index prices,
                   each column representing Z(T_i) - Z(T_{i-1})
     """
-    variations = np.diff(np.exp(2 * k1 * tenor_dates)) / (2 * k1)
-    correlations = np.diff(np.exp(k1 * tenor_dates)) / k1
+    # Moments relative to each period's end, so only exp(-k1 * dT) appears and
+    # nothing overflows at long tenors. Over [T_{i-1}, T_i] with I_i = int exp(-k1 (T_i - s)) dZ_s:
+    #   Var(I_i) = (1 - exp(-2 k1 dT)) / (2 k1),  Cov(I_i, dZ_i) = (1 - exp(-k1 dT)) / k1.
+    dT = np.diff(tenor_dates)
+    variations = -np.expm1(-2 * k1 * dT) / (2 * k1)
+    correlations = -np.expm1(-k1 * dT) / k1
 
     dIZ = np.random.randn(num_paths, len(tenor_dates) - 1) * np.sqrt(variations)
 
     dZ = np.random.randn(num_paths, len(tenor_dates) - 1)
     dZ = (correlations / variations) * dIZ + \
-         np.sqrt(np.diff(tenor_dates) - correlations**2 / variations) * dZ
+         np.sqrt(np.maximum(dT - correlations**2 / variations, 0.0)) * dZ
 
-    ZV = np.exp(-k1 * tenor_dates[1:]) * np.cumsum(dIZ, axis=1)
+    # ZV_i = exp(-k1 dT_i) ZV_{i-1} + I_i
+    decay = np.exp(-k1 * dT)
+    ZV = np.empty_like(dIZ)
+    acc = np.zeros(num_paths)
+    for i in range(len(dT)):
+        acc = decay[i] * acc + dIZ[:, i]
+        ZV[:, i] = acc
 
     return ZV, dZ

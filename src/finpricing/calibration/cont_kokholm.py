@@ -31,7 +31,7 @@ _KOU_BOUNDS: list[tuple[float, float]] = [
     (1.0, 100.0),   # k1
     (0.1,  50.0),   # k2
     (0.01,  0.99),  # p
-    (0.5,  50.0),   # alpha_plus
+    (1.05, 50.0),   # alpha_plus: E[e^Y] < inf needs alpha_plus > 1
     (0.5, 100.0),   # alpha_minus
     (-0.99,  0.0),  # rho
 ]
