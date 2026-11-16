@@ -9,6 +9,29 @@ from finpricing.utils.bs_utils import bs_call, bs_put
 from finpricing.utils.characteristic_functions import characteristic_function
 from finpricing.utils.fourier import FourierMethod, fourier_call_pricer
 
+# Kar-Madan damping and default grid (see utils/fourier.py).
+_KM_ALPHA, _KM_N, _KM_DELTA = 0.75, 1024, 0.17
+
+
+def _kar_madan_grid(model_params) -> dict:
+    """
+    Grid for Kar-Madan VIX pricing.
+
+    Kar-Madan evaluates the VIX characteristic function at u - (1 + alpha) i. With Kou
+    jumps (scaled by 1/2 in the VIX transform) that point lies a distance
+    alpha_plus - (1 + alpha)/2 from a pole. As alpha_plus -> 1 the integrand peaks sharply,
+    so the integration step shrinks with that distance and N grows to keep the same
+    frequency range. Merton jumps have no pole and use the default grid.
+    """
+    from finpricing.parameters import VIXKouModelParameters
+
+    if not isinstance(model_params, VIXKouModelParameters):
+        return {}
+    distance = model_params.alpha_plus - 0.5 * (1 + _KM_ALPHA)
+    delta = min(_KM_DELTA, 0.3 * distance)
+    n = int(2 ** np.ceil(np.log2(_KM_N * _KM_DELTA / delta)))
+    return {"N": n, "Delta": delta, "alpha": _KM_ALPHA}
+
 
 def price_vix_options(V0: float, K: float, T: float, r: float, model_params, 
                      pricing_method: str = 'Kar&Madan', option_type: str = 'call') -> float:
@@ -35,7 +58,8 @@ def price_vix_options(V0: float, K: float, T: float, r: float, model_params,
         
         # Convert string method to enum
         method = FourierMethod.CONT_TANKOV if pricing_method == 'Cont&Tankov' else FourierMethod.KAR_MADAN
-        us, ops = fourier_call_pricer(chr_func, T, r, method=method)
+        grid = _kar_madan_grid(model_params) if method == FourierMethod.KAR_MADAN else {}
+        us, ops = fourier_call_pricer(chr_func, T, r, method=method, **grid)
 
         # Interpolate to get prices for moneyness values between the points of np.exp(us)
         f = interpolate.interp1d(np.exp(us), ops)
