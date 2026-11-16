@@ -20,7 +20,8 @@ def _surface(params, V0=V0, r=0.0):
     K, T = np.meshgrid(STRIKES, MATURITIES)
     K, T = K.ravel(), T.ravel()
     prices = [price_vix_options(V0, k, t, r, params) for k, t in zip(K, T, strict=True)]
-    return OptionSurface(strike=K, maturity=T, price=prices, spot=V0, r=r)
+    # VIX options are on the VIX future: spot = future and q = r give the futures bounds.
+    return OptionSurface(strike=K, maturity=T, price=prices, spot=V0, r=r, q=r)
 
 
 def _vector(params, names):

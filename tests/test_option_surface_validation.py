@@ -32,7 +32,6 @@ def test_bad_spot_is_rejected(spot):
         OptionSurface(**{**GOOD, "spot": spot})
 
 
-@pytest.mark.xfail(strict=True, reason="#17: OptionSurface validation gaps")
 @pytest.mark.parametrize("case", list(BAD))
 def test_bad_surface_is_rejected(case):
     with pytest.raises(ValueError):
