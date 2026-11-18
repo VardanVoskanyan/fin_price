@@ -238,9 +238,9 @@ class TestCalibration:
         assert cal.objective(x, surface) > 1e-6
 
     def test_rejects_arbitrageable_quotes(self):
-        surface = OptionSurface(strike=[100], maturity=1.0, price=150.0, spot=100.0)
+        # OptionSurface now rejects the quote itself; the calibrator never sees it.
         with pytest.raises(ValueError, match="no-arbitrage"):
-            HestonCalibrator().calibrate(surface)
+            HestonCalibrator().calibrate(OptionSurface(strike=[100], maturity=1.0, price=150.0, spot=100.0))
 
     @pytest.mark.slow
     def test_recovers_parameters(self):

@@ -68,6 +68,14 @@ def test_fourier_pricers_agree_at_the_kou_calibrator_bound(T):
 
     low, _ = _KOU_BOUNDS[_KOU_NAMES.index("alpha_plus")]
     params = VIXKouModelParameters(alpha_plus=low)
+@pytest.mark.parametrize("alpha_plus", [1.02, 1.05, 1.1, 1.2])
+@pytest.mark.parametrize("T", [1 / 12, 0.25, 0.5])
+def test_kar_madan_accurate_near_the_kou_pole(alpha_plus, T):
+    """Kar-Madan's shifted contour approaches the pole of the Kou jump transform as
+    alpha_plus -> 1; the grid must still resolve the integrand (#33)."""
+    from finpricing.models.vix.pricing import price_vix_options
+
+    params = VIXKouModelParameters(alpha_plus=alpha_plus)
     for K in [0.8, 1.0, 1.3, 1.6]:
         km = price_vix_options(1.0, K, T, 0.0, params, "Kar&Madan")
         ct = price_vix_options(1.0, K, T, 0.0, params, "Cont&Tankov")
