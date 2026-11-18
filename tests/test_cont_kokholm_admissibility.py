@@ -58,3 +58,17 @@ def test_vix_model_negative_index_variance_raises():
         model.index_option_pricer(S0=100, strikes=np.array([90.0, 100.0, 110.0]), tenor_index=3)
     with pytest.raises(ValueError, match="sigma"):
         model.get_index_prices(100.0)
+
+
+@pytest.mark.parametrize("alpha_plus", [1.02, 1.05, 1.1, 1.2])
+@pytest.mark.parametrize("T", [1 / 12, 0.25, 0.5])
+def test_kar_madan_accurate_near_the_kou_pole(alpha_plus, T):
+    """Kar-Madan's shifted contour approaches the pole of the Kou jump transform as
+    alpha_plus -> 1; the grid must still resolve the integrand (#33)."""
+    from finpricing.models.vix.pricing import price_vix_options
+
+    params = VIXKouModelParameters(alpha_plus=alpha_plus)
+    for K in [0.8, 1.0, 1.3, 1.6]:
+        km = price_vix_options(1.0, K, T, 0.0, params, "Kar&Madan")
+        ct = price_vix_options(1.0, K, T, 0.0, params, "Cont&Tankov")
+        assert km == pytest.approx(ct, abs=1e-4)
