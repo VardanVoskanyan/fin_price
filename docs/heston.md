@@ -106,6 +106,7 @@ no-arbitrage lower bounds $\max(S_0 e^{-qT} - K e^{-rT}, 0)$ for calls and
 $\max(K e^{-rT} - S_0 e^{-qT}, 0)$ for puts; quadrature noise (about $10^{-12}$ for
 Lewis, more for the FFT methods) would otherwise leave some far out-of-the-money prices
 slightly negative.
+
 `HestonModel.implied_vol` returns the Black–Scholes implied volatility of out-of-the-money
 options, which is the model smile.
 
