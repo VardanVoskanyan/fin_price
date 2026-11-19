@@ -21,7 +21,6 @@ def _surface(params=TRUE):
     return OptionSurface(strike=K, maturity=T, price=prices, spot=100.0, r=0.03)
 
 
-@pytest.mark.xfail(strict=True, reason="#13: calibration report is missing fields")
 def test_heston_report_has_every_field():
     _, info = HestonCalibrator(**FAST).calibrate(_surface())
     assert set(info) >= HESTON_KEYS
@@ -31,7 +30,6 @@ def test_heston_report_has_every_field():
     assert info["max_iv_error"] >= info["iv_rmse"] >= 0
 
 
-@pytest.mark.xfail(strict=True, reason="#13: every evaluation failing returns parameters silently")
 def test_heston_raises_when_every_evaluation_fails(monkeypatch):
     def broken(*args, **kwargs):
         raise ValueError("pricer failed")
@@ -41,7 +39,6 @@ def test_heston_raises_when_every_evaluation_fails(monkeypatch):
         HestonCalibrator(**FAST).calibrate(_surface())
 
 
-@pytest.mark.xfail(strict=True, reason="#13: bounds are fixed and parameters stuck on a bound are not reported")
 def test_heston_reports_parameters_at_bounds():
     """True kappa = 2 with kappa capped at 0.5: the fit must end on the cap and say so."""
     calibrator = HestonCalibrator(bounds={"kappa": (0.01, 0.5)}, **FAST)
@@ -51,13 +48,11 @@ def test_heston_reports_parameters_at_bounds():
     assert info["success"] is False
 
 
-@pytest.mark.xfail(strict=True, reason="#13: unknown bound names are silently ignored")
 def test_heston_rejects_unknown_bound_names():
     with pytest.raises(ValueError):
         HestonCalibrator(bounds={"kapa": (0.1, 5.0)})
 
 
-@pytest.mark.xfail(strict=True, reason="#13: iv_rmse ignores quotes whose model IV is NaN")
 def test_heston_counts_failed_implied_vols(monkeypatch):
     """If the model IV of some quotes cannot be computed, the report must say how many."""
     real = heston_module.implied_volatility
