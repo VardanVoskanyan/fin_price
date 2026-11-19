@@ -43,7 +43,6 @@ def test_put_round_trip(method):
     assert iv == pytest.approx(0.3, abs=1e-6)
 
 
-@pytest.mark.xfail(strict=True, reason="#21: unknown option types are priced as calls")
 @pytest.mark.parametrize("option_type", ["Put", "p", "CALL"])
 def test_unknown_option_type_raises(option_type):
     with pytest.raises(ValueError):
@@ -52,21 +51,18 @@ def test_unknown_option_type_raises(option_type):
         implied_volatility(8.0, 100.0, 100.0, 1.0, 0.0, option_type=option_type)
 
 
-@pytest.mark.xfail(strict=True, reason="#21: implied_volatility does not broadcast r and q")
 def test_rates_and_dividends_broadcast():
     r, q = np.array([0.0, 0.03, 0.05]), np.array([0.0, 0.01, 0.02])
     prices = bs_price(100.0, 100.0, 1.0, r, 0.2, q=q)
     np.testing.assert_allclose(implied_volatility(prices, 100.0, 100.0, 1.0, r, q), 0.2, atol=1e-8)
 
 
-@pytest.mark.xfail(strict=True, reason="#21: the scalar calculator fails on arrays")
 def test_scalar_calculator_accepts_arrays():
     k = np.array([90.0, 100.0, 110.0])
     np.testing.assert_allclose(BlackScholesCalculator.call_price(100.0, k, 1.0, 0.03, 0.2),
                                bs_price(100.0, k, 1.0, 0.03, 0.2), rtol=1e-12)
 
 
-@pytest.mark.xfail(strict=True, reason="#21: volatilities above 5 return NaN")
 def test_high_volatility_round_trip():
     price = float(bs_price(100.0, 100.0, 0.01, 0.0, 6.0))
     assert implied_volatility(price, 100.0, 100.0, 0.01, 0.0) == pytest.approx(6.0, abs=1e-6)
