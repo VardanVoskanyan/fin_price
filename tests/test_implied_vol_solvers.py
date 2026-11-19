@@ -13,7 +13,6 @@ def _solve(price, method, **kw):
     return ImpliedVolatilityCalculator.implied_volatility(params)
 
 
-@pytest.mark.xfail(strict=True, reason="#21: out-of-bounds quotes fail in five different ways")
 @pytest.mark.parametrize("method", METHODS)
 @pytest.mark.parametrize("price", [120.0, 0.0])          # above S, and below intrinsic (S - K e^{-rT} > 0)
 def test_out_of_bounds_quote_raises_value_error(method, price):
@@ -28,14 +27,12 @@ def test_deep_in_the_money_call_round_trip(method):
     assert _solve(price, method, s=100.0, k=60.0, t=0.1, r=0.05) == pytest.approx(0.2, abs=1e-6)
 
 
-@pytest.mark.xfail(strict=True, reason="#21: no dividend yield")
 @pytest.mark.parametrize("method", METHODS)
 def test_dividend_yield_round_trip(method):
     price = float(bs_price(100.0, 105.0, 0.5, 0.03, 0.25, q=0.04))
     assert _solve(price, method, s=100.0, k=105.0, t=0.5, r=0.03, q=0.04) == pytest.approx(0.25, abs=1e-6)
 
 
-@pytest.mark.xfail(strict=True, reason="#21: calls only")
 @pytest.mark.parametrize("method", METHODS)
 def test_put_round_trip(method):
     price = float(bs_price(100.0, 90.0, 0.5, 0.03, 0.3, option_type="put"))

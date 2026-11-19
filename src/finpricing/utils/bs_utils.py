@@ -15,7 +15,9 @@ OPTION_TYPES = ('call', 'put')
 # maximum every call price rounds to its upper bound S e^{-qT}.
 _MIN_TOTAL_VOL = 1e-15
 _MAX_TOTAL_VOL = 100.0
-_TINY = 1e-300
+_TINY = np.finfo(float).smallest_subnormal
+_EPS = np.finfo(float).eps
+_SQRT_2PI = math.sqrt(2 * math.pi)
 
 
 def _check_option_type(option_type) -> np.ndarray:
@@ -131,6 +133,25 @@ def bs_vega(s, k, t, r, sigma, q=0.0):
     return s * np.exp(-q * t) * norm.pdf(d1) * np.sqrt(t)
 
 
+def _discounted(s: float, k: float, t: float, r: float, q: float) -> tuple[float, float]:
+    """S e^{-qT} and K e^{-rT}, computed exactly as bs_price does, so that a price which
+    rounds onto a no-arbitrage bound compares equal to it."""
+    return float(s * np.exp(-q * t)), float(k * np.exp(-r * t))
+
+
+def no_arbitrage_bounds(s: float, k: float, t: float, r: float, q: float,
+                        option_type: str) -> tuple[float, float]:
+    """
+    Bounds (lower, upper) for a European option price: a call lies in
+    (max(S e^{-qT} - K e^{-rT}, 0), S e^{-qT}), a put in (max(K e^{-rT} - S e^{-qT}, 0), K e^{-rT}).
+    Only prices strictly inside have an implied volatility.
+    """
+    disc_s, disc_k = _discounted(s, k, t, r, q)
+    if option_type == 'call':
+        return max(disc_s - disc_k, 0.0), disc_s
+    return max(disc_k - disc_s, 0.0), disc_k
+
+
 class _OTMQuote:
     """
     One option quote restated as the out-of-the-money option at its strike: a call
@@ -139,7 +160,10 @@ class _OTMQuote:
     intrinsic part, so its volatility can be recovered wherever the quote resolves it.
 
     Build it with :meth:`from_quote`, which returns None when the price is not
-    strictly inside the no-arbitrage bounds.
+    strictly inside the no-arbitrage bounds. ``rounding`` bounds the absolute error
+    the target inherits from the quote and the parity conversion: a target within
+    twice that of either bound of the OTM price, (0, S e^{-qT}) for a call and
+    (0, K e^{-rT}) for a put, does not determine a volatility.
     """
 
     def __init__(self, target, disc_s, disc_k, sqrt_t, drift, otm_type, rounding):
@@ -161,54 +185,71 @@ class _OTMQuote:
         price, s, k, t, r, q = (float(x) for x in (price, s, k, t, r, q))
         if not (s > 0 and k > 0 and t > 0):
             return None
-        # Same expressions as bs_price, so a price that rounds onto a bound is caught here.
-        disc_s, disc_k = float(s * np.exp(-q * t)), float(k * np.exp(-r * t))
+        disc_s, disc_k = _discounted(s, k, t, r, q)
         parity = disc_s - disc_k                       # C - P
-        if option_type == 'call':
-            lower, upper = max(parity, 0.0), disc_s
-        else:
-            lower, upper = max(-parity, 0.0), disc_k
+        lower, upper = no_arbitrage_bounds(s, k, t, r, q, option_type)
         if not lower < price < upper:                  # also rejects NaN
             return None
         otm_type = 'call' if disc_k >= disc_s else 'put'
-        eps = np.finfo(float).eps
         if otm_type == option_type:
-            target, rounding = price, 4 * eps * price
+            target, rounding = price, 4 * _EPS * price
         else:
             # price > lower guarantees target > 0 in floating point
             target = price - parity if option_type == 'call' else price + parity
-            rounding = 4 * eps * (price + disc_s + disc_k)
+            rounding = 4 * _EPS * (price + disc_s + disc_k)
         return cls(target, disc_s, disc_k, math.sqrt(t), math.log(s / k) + (r - q) * t,
                    otm_type, rounding)
 
-    def d1(self, sigma):
+    def _d1_d2_w(self, sigma):
         w = sigma * self.sqrt_t
-        return self.drift / w + 0.5 * w
+        d1 = self.drift / w + 0.5 * w
+        return d1, d1 - w, w
 
     def price(self, sigma):
         """Price of the OTM option at volatility sigma."""
-        w = sigma * self.sqrt_t
-        d1 = self.drift / w + 0.5 * w
-        d2 = d1 - w
+        d1, d2, _ = self._d1_d2_w(sigma)
         if self.otm_type == 'call':
             return float(self.disc_s * ndtr(d1) - self.disc_k * ndtr(d2))
         return float(self.disc_k * ndtr(-d2) - self.disc_s * ndtr(-d1))
 
     def vega(self, sigma):
-        return float(self.disc_s * norm.pdf(self.d1(sigma)) * self.sqrt_t)
+        d1, _, _ = self._d1_d2_w(sigma)
+        return self.disc_s * math.exp(-0.5 * d1 * d1) / _SQRT_2PI * self.sqrt_t
+
+    def gap(self, sigma):
+        """ln(model price) - ln(target): increasing in sigma and close to linear in ln(sigma)."""
+        return math.log(max(self.price(sigma), _TINY)) - math.log(self.target)
 
     def log_gap(self, log_sigma):
-        """ln(model price) - ln(target) at sigma = exp(log_sigma): increasing, nearly linear."""
+        """:meth:`gap` as a function of ln(sigma), for the unbracketed solvers."""
+        return self.gap(math.exp(min(max(log_sigma, -100.0), 100.0)))
+
+    def log_slope(self, log_sigma):
+        """
+        Derivative of :meth:`log_gap`, sigma * vega / price. Where the price underflows
+        it falls back to the asymptote d1 * d2 of d ln(price) / d ln(sigma) as sigma -> 0.
+        """
         sigma = math.exp(min(max(log_sigma, -100.0), 100.0))
-        return math.log(max(self.price(sigma), _TINY)) - math.log(self.target)
+        d1, d2, w = self._d1_d2_w(sigma)
+        price = self.price(sigma)
+        density = math.exp(-0.5 * d1 * d1) / _SQRT_2PI
+        if price > _TINY and density > 0:
+            return w * self.disc_s * density / price
+        return max(d1 * d2, 1.0)
+
+    def brent(self, lo, hi, rtol):
+        """Brent's method on :meth:`gap` over a bracket from :meth:`bracket`."""
+        return brentq(self.gap, lo, hi, xtol=_TINY, rtol=max(rtol, 4 * _EPS))
 
     def bracket(self, lo=1e-4, hi=5.0):
         """
         Volatilities (lo, hi) with price(lo) <= target <= price(hi). Starts from the
-        given pair and widens geometrically in sigma * sqrt(T) up to the search limits;
-        returns None if the target cannot be bracketed (it is then too close to a
-        bound to be resolved in floating point).
+        given pair and widens geometrically in sigma * sqrt(T) up to the search limits.
+        Returns None if the target is not :meth:`resolvable` or cannot be bracketed: it
+        is then too close to a bound to be resolved in floating point.
         """
+        if not self.resolvable():
+            return None
         while self.price(lo) > self.target:
             if lo * self.sqrt_t < _MIN_TOTAL_VOL:
                 return None
@@ -219,12 +260,24 @@ class _OTMQuote:
             lo, hi = hi, hi * 2.0
         return lo, hi
 
+    def resolvable(self):
+        """False if the target is within rounding of a bound of the OTM price."""
+        upper = self.disc_s if self.otm_type == 'call' else self.disc_k
+        return min(self.target, upper - self.target) > 2.0 * self.rounding
+
     def residual_ok(self, sigma, tol):
-        """True if sigma reprices the quote to within vega * tol plus rounding."""
-        if not (np.isfinite(sigma) and sigma > 0):
+        """
+        True if sigma reprices the target to within the price change of a relative
+        volatility move of tol (times 10), plus the rounding of the target and of the
+        price formula.
+        """
+        if not (math.isfinite(sigma) and sigma > 0):
             return False
-        error = abs(self.price(sigma) - self.target)
-        return error <= 10.0 * tol * sigma * self.vega(sigma) + 16.0 * self.rounding
+        d1, d2, _ = self._d1_d2_w(sigma)
+        sign = 1.0 if self.otm_type == 'call' else -1.0
+        terms = self.disc_s * ndtr(sign * d1) + self.disc_k * ndtr(sign * d2)
+        allowed = 10.0 * tol * sigma * self.vega(sigma) + 2.0 * self.rounding + 4.0 * _EPS * terms
+        return abs(self.price(sigma) - self.target) <= allowed
 
 
 def implied_volatility(price, s, k, t, r, q=0.0, option_type='call',
@@ -233,7 +286,7 @@ def implied_volatility(price, s, k, t, r, q=0.0, option_type='call',
     Vectorised Black-Scholes implied volatility. Every argument broadcasts.
 
     Each quote is restated as the out-of-the-money option at its strike through
-    put-call parity, then solved with Brent's method in ln(sigma). ``lo`` and ``hi``
+    put-call parity, then solved with Brent's method on ln(price). ``lo`` and ``hi``
     are the starting bracket only: it widens geometrically in sigma * sqrt(T) until it
     contains the root.
 
@@ -257,7 +310,5 @@ def implied_volatility(price, s, k, t, r, q=0.0, option_type='call',
         bounds = quote.bracket(lo, hi)
         if bounds is None:
             continue
-        log_sigma = brentq(quote.log_gap, math.log(bounds[0]), math.log(bounds[1]),
-                           xtol=1e-14, rtol=4 * np.finfo(float).eps)
-        out[idx] = math.exp(log_sigma)
+        out[idx] = quote.brent(*bounds, rtol=4 * _EPS)
     return out if out.ndim else float(out)
