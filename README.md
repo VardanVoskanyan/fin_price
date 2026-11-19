@@ -93,9 +93,9 @@ The hieroglyphs are explained in [docs/README.md](docs/README.md#the-glyphs).
 | | Notebook | What it shows | Checks |
 |---|---|---|---|
 | 01 𓏺 | [Implied volatility](notebooks/01_implied_volatility.ipynb) | Where five implied-vol solvers fail on a 1-day to 5-year grid, and why inverting out-of-the-money options fixes it | 8 |
-| 02 𓏻 | [Cont–Kokholm](notebooks/02_cont_kokholm.ipynb) | Paper replication: VIX smiles, VIX term structure, index surface, both markets with one parameter set | 8 |
-| 03 𓏼 | [Cont–Kokholm checks](notebooks/03_cont_kokholm_checks.ipynb) | Martingale tests, FFT vs FFT, Fourier vs Monte Carlo, jump moments, Monte Carlo convergence | 9 |
-| 04 𓏽 | [Heston](notebooks/04_heston.ipynb) | Three pricers agree, smile anatomy, QE vs the exact variance law, VIX, calibration round trip | 16 |
+| 02 𓏻 | [Cont–Kokholm](notebooks/02_cont_kokholm.ipynb) | Can one parameter set give both the downward index skew and the upward VIX smile? A replication of the paper | 8 |
+| 03 𓏼 | [Cont–Kokholm checks](notebooks/03_cont_kokholm_checks.ipynb) | Is the implementation right: martingale tests, FFT against FFT, Fourier against Monte Carlo, jump moments, convergence | 9 |
+| 04 𓏽 | [Heston](notebooks/04_heston.ipynb) | Is the implementation right (three pricers, QE against the exact variance law), what the model does (smiles, surface, calibration), and where it fails (VIX smiles) | 16 |
 
 <table>
   <tr>
