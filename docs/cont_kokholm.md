@@ -1,4 +1,4 @@
-# Cont–Kokholm: joint S&P 500 and VIX model
+# 𓃹 Cont–Kokholm: joint S&P 500 and VIX model
 
 Cont & Kokholm (2013), *A consistent pricing model for index options and volatility
 derivatives*, Mathematical Finance 23(2). The model specifies the dynamics of forward
@@ -146,7 +146,7 @@ Only $e^{-k_1 \Delta}$ appears, so nothing overflows at long tenors or large $k_
 | $V^i_0$ | `VI_0` | initial forward variance swap rates |
 | $b_i$ | `MERTON_B_I`, `KOU_B_I` | index jump loading per tenor period |
 
-## Calibration
+## 𓍝 Calibration
 
 `ContKokholmCalibrator('Merton' | 'Kou')` fits the parameters to VIX option quotes given
 as an `OptionSurface` (its `spot` is the VIX level). The loss is the weighted sum of

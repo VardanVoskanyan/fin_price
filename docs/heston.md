@@ -1,4 +1,4 @@
-# Heston stochastic volatility
+# 𓈗 Heston stochastic volatility
 
 Heston (1993). Variance is a mean-reverting square-root process correlated with the index.
 It produces a skew through $\rho$ and smile curvature through $\xi$, and has a closed-form
@@ -110,7 +110,7 @@ slightly negative.
 `HestonModel.implied_vol` returns the Black–Scholes implied volatility of out-of-the-money
 options, which is the model smile.
 
-## Monte Carlo
+## 𓁨 Monte Carlo
 
 `simulate_heston` uses Andersen's (2008) Quadratic-Exponential scheme. Given $v_t$, the
 next variance has conditional mean $m$ and variance $s^2$ known in closed form. With
@@ -182,7 +182,7 @@ Heston cannot match the VIX smile and the S&P smile at the same time; the VIX sm
 produces slopes the wrong way. That gap is what the Cont–Kokholm model addresses, and the
 Heston VIX functions are mainly useful for showing it.
 
-## Calibration
+## 𓍝 Calibration
 
 `HestonCalibrator().calibrate(surface)` fits $(v_0, \kappa, \theta, \xi, \rho)$ to an
 `OptionSurface` of index options. The loss is

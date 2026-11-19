@@ -26,9 +26,9 @@ each one checks the model against an independent method and stops if they disagr
 
 | | Pricing | Simulation | VIX | Calibration | Maths |
 |---|---|---|---|---|---|
-| **Heston** | Lewis integral, Kar–Madan and Cont–Tankov FFT | Andersen QE | closed-form futures and options | ✓ | [heston.md](docs/heston.md) |
-| **Cont–Kokholm** | Fourier (VIX), conditional Monte Carlo (index) | Merton or Kou jumps | joint with the index | ✓ | [cont_kokholm.md](docs/cont_kokholm.md) |
-| **Black–Scholes** | vectorised prices, Greeks, implied volatility | | | | [black_scholes.md](docs/black_scholes.md) |
+| 𓈗 **Heston** | Lewis integral, Kar–Madan and Cont–Tankov FFT | Andersen QE | closed-form futures and options | ✓ | [heston.md](docs/heston.md) |
+| 𓃹 **Cont–Kokholm** | Fourier (VIX), conditional Monte Carlo (index) | Merton or Kou jumps | joint with the index | ✓ | [cont_kokholm.md](docs/cont_kokholm.md) |
+| 𓊽 **Black–Scholes** | vectorised prices, Greeks, implied volatility | | | | [black_scholes.md](docs/black_scholes.md) |
 
 ## Quickstart
 
@@ -86,15 +86,16 @@ implied_volatility(prices, 100, strikes, 0.5, 0.03, option_type='put')   # all 0
 
 ## Notebooks
 
-Each notebook is a worked example and a test suite: cells marked **PASS** compare the model
+Each notebook is a worked example and a test suite: cells marked **𓋹 PASS** compare the model
 with an independent method and raise if they disagree. They run in under half a minute each.
+The hieroglyphs are explained in [docs/README.md](docs/README.md#the-glyphs).
 
 | | Notebook | What it shows | Checks |
 |---|---|---|---|
-| 01 | [Implied volatility](notebooks/01_implied_volatility.ipynb) | Where five implied-vol solvers fail on a 1-day to 5-year grid, and why inverting out-of-the-money options fixes it | 8 |
-| 02 | [Cont–Kokholm](notebooks/02_cont_kokholm.ipynb) | Paper replication: VIX smiles, VIX term structure, index surface, both markets with one parameter set | 8 |
-| 03 | [Cont–Kokholm checks](notebooks/03_cont_kokholm_checks.ipynb) | Martingale tests, FFT vs FFT, Fourier vs Monte Carlo, jump moments, Monte Carlo convergence | 9 |
-| 04 | [Heston](notebooks/04_heston.ipynb) | Three pricers agree, smile anatomy, QE vs the exact variance law, VIX, calibration round trip | 16 |
+| 01 𓏺 | [Implied volatility](notebooks/01_implied_volatility.ipynb) | Where five implied-vol solvers fail on a 1-day to 5-year grid, and why inverting out-of-the-money options fixes it | 8 |
+| 02 𓏻 | [Cont–Kokholm](notebooks/02_cont_kokholm.ipynb) | Paper replication: VIX smiles, VIX term structure, index surface, both markets with one parameter set | 8 |
+| 03 𓏼 | [Cont–Kokholm checks](notebooks/03_cont_kokholm_checks.ipynb) | Martingale tests, FFT vs FFT, Fourier vs Monte Carlo, jump moments, Monte Carlo convergence | 9 |
+| 04 𓏽 | [Heston](notebooks/04_heston.ipynb) | Three pricers agree, smile anatomy, QE vs the exact variance law, VIX, calibration round trip | 16 |
 
 <table>
   <tr>
