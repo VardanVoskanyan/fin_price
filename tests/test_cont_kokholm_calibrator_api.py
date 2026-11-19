@@ -43,28 +43,24 @@ def _capture_de(monkeypatch):
     return seen
 
 
-@pytest.mark.xfail(strict=True, reason="#23: unknown options are not validated")
 @pytest.mark.parametrize("kwargs", [{"pricing_method": "Carr-Madan"}, {"model_type": "Heston"}])
 def test_invalid_options_raise(kwargs):
     with pytest.raises(ValueError):
         ContKokholmCalibrator(**kwargs)
 
 
-@pytest.mark.xfail(strict=True, reason="#23: calibrate swallows unknown keyword arguments")
 def test_unknown_calibrate_arguments_raise(monkeypatch):
     _capture_de(monkeypatch)
     with pytest.raises(TypeError):
         ContKokholmCalibrator().calibrate(_surface(), typo=1)
 
 
-@pytest.mark.xfail(strict=True, reason="#23: the seed is hard-coded to 42")
 def test_seed_reaches_the_optimiser(monkeypatch):
     seen = _capture_de(monkeypatch)
     ContKokholmCalibrator(seed=7).calibrate(_surface())
     assert seen["kwargs"]["seed"] == 7
 
 
-@pytest.mark.xfail(strict=True, reason="#23: rho is fitted although VIX options do not depend on it")
 @pytest.mark.parametrize("model_type", ["Merton", "Kou"])
 def test_rho_is_fixed_not_fitted(monkeypatch, model_type):
     seen = _capture_de(monkeypatch)
@@ -90,7 +86,6 @@ def test_objective_prices_once_per_maturity(monkeypatch):
     assert calls["n"] == 3
 
 
-@pytest.mark.xfail(strict=True, reason="#13: the Cont-Kokholm calibrator returns info=None")
 def test_report_has_every_field(monkeypatch):
     _capture_de(monkeypatch)
     _, info = ContKokholmCalibrator().calibrate(_surface())
@@ -98,7 +93,6 @@ def test_report_has_every_field(monkeypatch):
     assert info["n_quotes"] == 15
 
 
-@pytest.mark.xfail(strict=True, reason="#13: programming errors inside the objective are swallowed")
 def test_programming_errors_propagate(monkeypatch):
     surface = _surface()                     # priced before the pricer is broken
 

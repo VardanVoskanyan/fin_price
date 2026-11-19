@@ -9,7 +9,6 @@ from finpricing.parameters import VIXKouModelParameters, VIXMertonModelParameter
 STRIKES = np.array([90.0, 100.0, 110.0])
 
 
-@pytest.mark.xfail(strict=True, reason="#15: the constructor ignores user parameters")
 def test_constructor_takes_user_parameters():
     params = VIXMertonModelParameters(lmbd=2.0)
     vi_0, b_i = VI_0 * 1.1, MERTON_B_I * 0.9
@@ -19,7 +18,6 @@ def test_constructor_takes_user_parameters():
     np.testing.assert_array_equal(model.b_i, b_i)
 
 
-@pytest.mark.xfail(strict=True, reason="#15: inputs are not validated")
 @pytest.mark.parametrize("kwargs", [
     {"Vi_0": VI_0[:5]},                                           # one value short
     {"b_i": MERTON_B_I[:4]},
@@ -36,7 +34,6 @@ def test_kou_parameters_are_accepted():
     assert isinstance(model.params, VIXKouModelParameters)
 
 
-@pytest.mark.xfail(strict=True, reason="#15: inputs can be changed after paths are cached")
 @pytest.mark.parametrize("name", ["params", "tenor_dates", "Vi_0", "b_i"])
 def test_inputs_are_read_only(name):
     model = VixModel(model_type="Merton")
@@ -44,7 +41,6 @@ def test_inputs_are_read_only(name):
         setattr(model, name, getattr(model, name))
 
 
-@pytest.mark.xfail(strict=True, reason="#15: tenor_index is not checked")
 @pytest.mark.parametrize("tenor_index", [0, 7, 10, -1])
 def test_tenor_index_out_of_range_raises(tenor_index):
     model = VixModel(model_type="Merton")
@@ -53,7 +49,6 @@ def test_tenor_index_out_of_range_raises(tenor_index):
         model.index_option_pricer(S0=100.0, strikes=STRIKES, tenor_index=tenor_index)
 
 
-@pytest.mark.xfail(strict=True, reason="#15: get_index_prices returns conditional means, not S_T")
 @pytest.mark.parametrize("r", [0.0, 0.03])
 def test_index_paths_reproduce_option_prices(r):
     """Call prices from the simulated S_T must match the conditional Monte Carlo pricer."""

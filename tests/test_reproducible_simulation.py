@@ -10,8 +10,6 @@ from finpricing.models.jump_diffusion.jump_diffusion import (
 from finpricing.models.vix.model import VixModel
 from finpricing.utils.math_utils import generate_correlated_diffusions
 
-pytestmark = pytest.mark.xfail(strict=True, reason="#22: simulations use NumPy's global RNG")
-
 
 def _global_state():
     return np.random.get_state()[1].copy()
