@@ -49,11 +49,8 @@ def test_diffusion_variance_unchanged_for_paper_tenors():
 
 def test_vix_model_negative_index_variance_raises():
     """The issue's reproducer: VixModel must raise rather than return NaN index prices."""
-    np.random.seed(0)
-    model = VixModel(model_type="Merton")
-    model.params = VIXMertonModelParameters(lmbd=10, m=0.5, delta=0.3)
-    model.constraint_cf = model.params.lmbd * (model.params.m**2 + model.params.delta**2)
-    model.store_tenor_data(2_000)
+    model = VixModel(model_type="Merton", params=VIXMertonModelParameters(lmbd=10, m=0.5, delta=0.3))
+    model.store_tenor_data(2_000, rng=0)
     with pytest.raises(ValueError, match="sigma"):
         model.index_option_pricer(S0=100, strikes=np.array([90.0, 100.0, 110.0]), tenor_index=3)
     with pytest.raises(ValueError, match="sigma"):

@@ -69,9 +69,9 @@ def test_rho_is_fixed_not_fitted(monkeypatch, model_type):
     assert params.rho == -0.6
 
 
-@pytest.mark.xfail(strict=True, reason="#23: the objective reprices the FFT grid once per quote")
 def test_objective_prices_once_per_maturity(monkeypatch):
     """Every FFT pricer call goes through utils.fourier; count them."""
+    surface = _surface(n_maturities=3)       # priced before the counter is installed
     calls = {"n": 0}
     for name in ["kar_madan_pricer", "cont_tankov_pricer"]:
         original = getattr(fourier, name)
@@ -81,7 +81,7 @@ def test_objective_prices_once_per_maturity(monkeypatch):
             return _original(*args, **kwargs)
 
         monkeypatch.setattr(fourier, name, counting)
-    value = ContKokholmCalibrator("Merton").objective(MERTON_X, _surface(n_maturities=3))
+    value = ContKokholmCalibrator("Merton").objective(MERTON_X, surface)
     assert value < 1e-12
     assert calls["n"] == 3
 
