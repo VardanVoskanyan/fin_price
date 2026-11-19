@@ -95,7 +95,7 @@ def check(condition: bool, message: str) -> None:
     """Record and print a model check; raises if it fails, so a broken model stops the notebook."""
     ok = bool(condition)
     _results.append((ok, message))
-    print(f"{'PASS' if ok else 'FAIL'}  {message}")
+    print(f"{'𓋹 PASS' if ok else 'FAIL'}  {message}")
     if not ok:
         raise AssertionError(message)
 
@@ -104,7 +104,7 @@ def summary() -> None:
     """Print all checks run in this notebook."""
     print(f"{sum(ok for ok, _ in _results)}/{len(_results)} checks passed")
     for ok, message in _results:
-        print(f"  {'PASS' if ok else 'FAIL'}  {message}")
+        print(f"  {'𓋹 PASS' if ok else 'FAIL'}  {message}")
 
 
 plt.style.use("default")
