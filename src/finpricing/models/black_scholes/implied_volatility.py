@@ -182,7 +182,7 @@ class ImpliedVolatilityCalculator:
         """
         Calculate implied volatility with a scipy solver on ln(price) - ln(target) as a
         function of ln(sigma): Brent on the bracket, or HYBR, LM and Newton from the
-        initial guess (the geometric middle of the bracket if the guess falls outside).
+        initial guess, clipped into the bracket.
         """
         quote, lo, hi = ImpliedVolatilityCalculator._prepare(params)
 
@@ -193,8 +193,7 @@ class ImpliedVolatilityCalculator:
                 x0 = ImpliedVolatilityCalculator.corrado_miller_guess(params)
             case _:
                 x0 = 0.25
-        if not (np.isfinite(x0) and lo < x0 < hi):
-            x0 = math.sqrt(lo * hi)
+        x0 = min(max(x0, lo), hi) if np.isfinite(x0) else math.sqrt(lo * hi)
         u0 = math.log(x0)
 
         if params.method in ImpliedVolatilityCalculator.ROOT_METHODS:

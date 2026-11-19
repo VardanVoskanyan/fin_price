@@ -220,22 +220,31 @@ class _OTMQuote:
         """ln(model price) - ln(target): increasing in sigma and close to linear in ln(sigma)."""
         return math.log(max(self.price(sigma), _TINY)) - math.log(self.target)
 
-    def log_gap(self, log_sigma):
-        """:meth:`gap` as a function of ln(sigma), for the unbracketed solvers."""
-        return self.gap(math.exp(min(max(log_sigma, -100.0), 100.0)))
-
-    def log_slope(self, log_sigma):
+    def _log_price(self, log_sigma):
         """
-        Derivative of :meth:`log_gap`, sigma * vega / price. Where the price underflows
-        it falls back to the asymptote d1 * d2 of d ln(price) / d ln(sigma) as sigma -> 0.
+        (ln price, d ln price / d ln sigma) at sigma = exp(log_sigma). Where the price is
+        below min(1e-250, 1e-10 * target), so far from the root and possibly underflowed,
+        both come from the small-volatility asymptote price ~ S e^{-qT} phi(d1) w / (d1 d2),
+        w = sigma sqrt(T), which keeps the function smooth for the unbracketed solvers.
         """
         sigma = math.exp(min(max(log_sigma, -100.0), 100.0))
         d1, d2, w = self._d1_d2_w(sigma)
         price = self.price(sigma)
-        density = math.exp(-0.5 * d1 * d1) / _SQRT_2PI
-        if price > _TINY and density > 0:
-            return w * self.disc_s * density / price
-        return max(d1 * d2, 1.0)
+        log_density = -0.5 * d1 * d1 - math.log(_SQRT_2PI)
+        if price > min(1e-250, 1e-10 * self.target) or d1 * d2 <= 1.0:
+            log_price = math.log(max(price, _TINY))
+            return log_price, w * self.disc_s * math.exp(log_density - log_price)
+        product = d1 * d2
+        log_price = math.log(self.disc_s) + log_density + math.log(w) - math.log(product)
+        return log_price, product + 1.0 + (d1 * d1 + d2 * d2) / product
+
+    def log_gap(self, log_sigma):
+        """ln(model price) - ln(target) as a function of ln(sigma), for the unbracketed solvers."""
+        return self._log_price(log_sigma)[0] - math.log(self.target)
+
+    def log_slope(self, log_sigma):
+        """Derivative of :meth:`log_gap`."""
+        return self._log_price(log_sigma)[1]
 
     def brent(self, lo, hi, rtol):
         """Brent's method on :meth:`gap` over a bracket from :meth:`bracket`."""
