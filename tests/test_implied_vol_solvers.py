@@ -21,11 +21,38 @@ def test_out_of_bounds_quote_raises_value_error(method, price):
         _solve(price, method, s=100.0, k=90.0, t=1.0, r=0.03)
 
 
-@pytest.mark.xfail(strict=True, reason="#21: deep in-the-money calls fail or return nonsense")
+@pytest.mark.xfail(strict=True, reason="#21: a quote at the lower bound has no positive volatility")
 @pytest.mark.parametrize("method", METHODS)
-def test_deep_in_the_money_call_round_trip(method):
+def test_quote_at_the_lower_bound_raises_value_error(method):
+    # At K=60, T=0.1 the time value (~1e-16) is below one ulp of the price, so the
+    # sigma=0.2 call price rounds to exactly S - K e^{-rT}.
     price = float(bs_price(100.0, 60.0, 0.1, 0.05, 0.2))
-    assert _solve(price, method, s=100.0, k=60.0, t=0.1, r=0.05) == pytest.approx(0.2, abs=1e-6)
+    with pytest.raises(ValueError, match="no-arbitrage"):
+        _solve(price, method, s=100.0, k=60.0, t=0.1, r=0.05)
+
+
+# Deep ITM quotes whose time value is still resolvable in float64; marked per method
+# because some solvers already recover them.
+_DEEP_ITM_FAILING = {
+    (70.0, 0.1): {Method.LM, Method.ITERATIVE},
+    (60.0, 0.25): {Method.ITERATIVE},
+}
+_DEEP_ITM_CASES = [
+    pytest.param(
+        k, t, method,
+        marks=[pytest.mark.xfail(strict=True, reason="#21: deep in-the-money calls return nonsense")]
+        if method in failing else [],
+        id=f"K{k:g}-T{t:g}-{method.name}",
+    )
+    for (k, t), failing in _DEEP_ITM_FAILING.items()
+    for method in METHODS
+]
+
+
+@pytest.mark.parametrize(("k", "t", "method"), _DEEP_ITM_CASES)
+def test_deep_in_the_money_call_round_trip(k, t, method):
+    price = float(bs_price(100.0, k, t, 0.05, 0.2))
+    assert _solve(price, method, s=100.0, k=k, t=t, r=0.05) == pytest.approx(0.2, abs=1e-6)
 
 
 @pytest.mark.xfail(strict=True, reason="#21: no dividend yield")
