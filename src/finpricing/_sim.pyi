@@ -9,6 +9,7 @@ def simul_total_jumps_merton(
     k2: float,
     m: float,
     delta: float,
+    seed: int,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]: ...
 
 def simul_total_jumps_kou(
@@ -20,4 +21,5 @@ def simul_total_jumps_kou(
     p: float,
     alpha_plus: float,
     alpha_minus: float,
+    seed: int,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]: ...

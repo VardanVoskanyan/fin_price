@@ -24,7 +24,24 @@ def compute_weights(num: int, method: str = "trapezoidal") -> np.ndarray:
 
 
 
-def generate_correlated_diffusions(num_paths: int, ticks: np.ndarray, rho: float):
+RngLike = np.random.Generator | int | None
+"""Anything ``np.random.default_rng`` accepts: a Generator (used as is), an int seed, or None."""
+
+
+def as_generator(rng: RngLike) -> np.random.Generator:
+    """
+    Return a NumPy Generator for ``rng``.
+
+    A Generator is returned unchanged, so callers that pass one share its stream. An int
+    seeds a new Generator; None gives a fresh, unpredictably seeded one. NumPy's global
+    random state is never used.
+    """
+    return np.random.default_rng(rng)
+
+
+def generate_correlated_diffusions(
+    num_paths: int, ticks: np.ndarray, rho: float, rng: RngLike = None
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Simulate increments of correlated Brownian diffusions.
 
@@ -32,6 +49,7 @@ def generate_correlated_diffusions(num_paths: int, ticks: np.ndarray, rho: float
         num_paths (int): Number of paths.
         ticks (np.ndarray): Array of floats representing the time steps t_0 < ... < t_{n-1}.
         rho (float): Correlation coefficient.
+        rng: Generator or int seed (see ``as_generator``). None draws fresh entropy.
 
     Returns:
         Tuple[np.ndarray, np.ndarray]: Two matrices representing correlated Brownian increments
@@ -45,11 +63,12 @@ def generate_correlated_diffusions(num_paths: int, ticks: np.ndarray, rho: float
         raise ValueError("The ticks array must contain at least two time steps.")
     if np.any(np.diff(ticks) <= 0):
         raise ValueError("Ticks must be strictly increasing.")
+    rng = as_generator(rng)
 
     # Simulate independent Brownian increments
     time_diffs = np.sqrt(np.diff(ticks))
-    independent_increments_1 = np.random.randn(num_paths, len(ticks) - 1) * time_diffs
-    independent_increments_2 = np.random.randn(num_paths, len(ticks) - 1) * time_diffs
+    independent_increments_1 = rng.standard_normal((num_paths, len(ticks) - 1)) * time_diffs
+    independent_increments_2 = rng.standard_normal((num_paths, len(ticks) - 1)) * time_diffs
 
     # Create correlated increments
     correlated_increments_2 = rho * independent_increments_1 + np.sqrt(1 - rho ** 2) * independent_increments_2
