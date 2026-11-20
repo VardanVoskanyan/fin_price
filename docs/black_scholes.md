@@ -1,4 +1,4 @@
-# Black–Scholes and implied volatility
+# 𓊽 Black–Scholes and implied volatility
 
 Black–Scholes is the quoting convention for the rest of the library: market and model
 prices are compared through their implied volatilities, and calibration losses are
