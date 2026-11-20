@@ -5,6 +5,7 @@ import numpy as np
 from scipy import interpolate
 
 from finpricing.models.vix.model import get_sigmas, get_UTm
+from finpricing.models.vix.utils import jump_second_moment
 from finpricing.utils.bs_utils import bs_call, bs_put
 from finpricing.utils.characteristic_functions import characteristic_function
 from finpricing.utils.fourier import FourierMethod, fourier_call_pricer
@@ -33,47 +34,82 @@ def _kar_madan_grid(model_params) -> dict:
     return {"N": n, "Delta": delta, "alpha": _KM_ALPHA}
 
 
-def price_vix_options(V0: float, K: float, T: float, r: float, model_params, 
+def _fourier_method(pricing_method: str) -> FourierMethod:
+    try:
+        return FourierMethod(pricing_method)
+    except ValueError:
+        raise ValueError(f"Unknown pricing_method {pricing_method!r}; use one of "
+                         f"{[m.value for m in FourierMethod]}.") from None
+
+
+def price_vix_option_slice(V0: float, strikes, T: float, r: float, model_params,
+                           pricing_method: str = 'Kar&Madan', option_type='call') -> np.ndarray:
+    """
+    Price VIX options with one maturity and many strikes from a single Fourier transform.
+
+    The FFT gives call prices on a log-moneyness grid; each strike is interpolated from it
+    and puts follow from parity on the VIX future (a martingale, discounted at r):
+    C - P = exp(-rT) (V0 - K).
+
+    Args:
+        V0: Current VIX future level.
+        strikes: Strikes, shape (n,).
+        T: Common time to maturity.
+        r: Risk-free rate.
+        model_params: VIXMertonModelParameters or VIXKouModelParameters.
+        pricing_method: 'Kar&Madan' or 'Cont&Tankov'.
+        option_type: 'call' / 'put', one value or one per strike.
+
+    Returns:
+        Prices, shape (n,).
+
+    Raises:
+        ValueError: for an unknown ``pricing_method`` or ``option_type``, or a strike outside
+            the FFT grid.
+    """
+    method = _fourier_method(pricing_method)
+    strikes = np.atleast_1d(np.asarray(strikes, dtype=float))
+    option_type = np.broadcast_to(np.asarray(option_type), strikes.shape)
+    bad = ~np.isin(option_type, ['call', 'put'])
+    if np.any(bad):
+        raise ValueError(f"Unknown option type: {option_type[bad][0]}")
+
+    def chr_func(x):
+        return characteristic_function(x, T, model_params, asset_type='VIX')
+
+    grid = _kar_madan_grid(model_params) if method == FourierMethod.KAR_MADAN else {}
+    us, ops = fourier_call_pricer(chr_func, T, r, method=method, **grid)
+
+    # Interpolate to get prices for moneyness values between the points of np.exp(us)
+    calls = V0 * interpolate.interp1d(np.exp(us), ops)(strikes / V0)
+    return np.where(option_type == 'call', calls, calls - np.exp(-r * T) * (V0 - strikes))
+
+
+def price_vix_options(V0: float, K: float, T: float, r: float, model_params,
                      pricing_method: str = 'Kar&Madan', option_type: str = 'call') -> float:
     """
     Returns the price of an option on VIX future using Fourier transform method.
-    
+
+    To price several strikes of one maturity, ``price_vix_option_slice`` runs the
+    transform once instead of once per strike.
+
     Args:
-        V0: Current VIX level
+        V0: Current VIX future level
         K: Strike price
         T: Time to maturity
         r: Risk-free rate
         model_params: Model parameters (VIXMertonModelParameters or VIXKouModelParameters)
         pricing_method: Fourier pricing method ('Cont&Tankov' or 'Kar&Madan')
         option_type: Option type ('call' or 'put')
-        
+
     Returns:
         Option price
+
+    Raises:
+        ValueError: for an unknown ``pricing_method`` or ``option_type``.
     """
-    moneyness = K/V0
-
-    if option_type == 'call':
-        def chr_func(x):
-            return characteristic_function(x, T, model_params, asset_type='VIX')
-        
-        # Convert string method to enum
-        method = FourierMethod.CONT_TANKOV if pricing_method == 'Cont&Tankov' else FourierMethod.KAR_MADAN
-        grid = _kar_madan_grid(model_params) if method == FourierMethod.KAR_MADAN else {}
-        us, ops = fourier_call_pricer(chr_func, T, r, method=method, **grid)
-
-        # Interpolate to get prices for moneyness values between the points of np.exp(us)
-        f = interpolate.interp1d(np.exp(us), ops)
-
-        return V0*f(moneyness)
-
-    elif option_type == 'put':
-        # V0 is the VIX future (a martingale) and prices are discounted at r:
-        # C - P = exp(-rT) (V0 - K).
-        call_price = price_vix_options(V0, K, T, r, model_params, pricing_method, 'call')
-        return call_price - np.exp(-r*T) * (V0 - K)
-    
-    else:
-        raise ValueError(f"Unknown option type: {option_type}")
+    return float(price_vix_option_slice(V0, [K], T, r, model_params, pricing_method,
+                                        option_type)[0])
 
 
 def price_index_options(S0, Vi_0, strikes, r, tenor_dates, stored_data, b_i, model_params, option_type='call'):
@@ -104,14 +140,7 @@ def price_index_options(S0, Vi_0, strikes, r, tenor_dates, stored_data, b_i, mod
     # Compute the sigma_i
     rho = model_params.rho
     
-    from finpricing.parameters import VIXKouModelParameters, VIXMertonModelParameters
-    match model_params:
-        case VIXKouModelParameters():
-            constraint_cf = 2 * model_params.lmbd * (model_params.p / model_params.alpha_plus**2 +
-                               (1 - model_params.p) / model_params.alpha_minus**2)
-        case VIXMertonModelParameters():
-            constraint_cf = model_params.lmbd * (model_params.m**2 + model_params.delta**2)
-    
+    constraint_cf = jump_second_moment(model_params)
     sigmas_sq = get_sigmas(Vi_0[:k], VTi[:,:k], constraint_cf, b_i[:k])
     
     # Compute U_T_k and sigma*

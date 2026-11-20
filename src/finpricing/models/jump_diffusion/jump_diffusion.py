@@ -5,6 +5,7 @@ import numpy as np
 from scipy.integrate import quad_vec
 
 from finpricing.parameters import VIXKouModelParameters, VIXMertonModelParameters
+from finpricing.utils.math_utils import RngLike, as_generator
 
 try:
     from finpricing._sim import simul_total_jumps_kou as _rust_kou
@@ -87,6 +88,7 @@ def simul_total_jumps(
         num_paths: int,
         T1: float,
         T2: float,
+        rng: RngLike = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Simulate jump terms according to model parameters between times T1 and T2.
@@ -96,6 +98,11 @@ def simul_total_jumps(
         num_paths: Number of simulation paths.
         T1: Start time (non-negative).
         T2: End time (positive, greater than T1).
+        rng: Generator or int seed (see ``utils.math_utils.as_generator``). None draws
+            fresh entropy. NumPy's global random state is never used. With the Rust
+            extension built, one 64-bit seed is drawn from ``rng`` and the extension runs
+            a seeded ChaCha8 stream per path, so results are reproducible for a given
+            build but differ from the pure-Python ones.
 
     Returns:
         Two 1D arrays:
@@ -104,13 +111,15 @@ def simul_total_jumps(
     """
     if T1 < 0 or T2 <= T1:
         raise ValueError("T1 must be non-negative and T2 must be greater than T1.")
+    rng = as_generator(rng)
 
     if _RUST_AVAILABLE:
+        seed = int(rng.integers(0, 2**64, dtype=np.uint64))
         match model_params:
             case VIXMertonModelParameters():
-                return _rust_merton(num_paths, T1, T2, model_params.lmbd, model_params.k2, model_params.m, model_params.delta)
+                return _rust_merton(num_paths, T1, T2, model_params.lmbd, model_params.k2, model_params.m, model_params.delta, seed)
             case VIXKouModelParameters():
-                return _rust_kou(num_paths, T1, T2, model_params.lmbd, model_params.k2, model_params.p, model_params.alpha_plus, model_params.alpha_minus)
+                return _rust_kou(num_paths, T1, T2, model_params.lmbd, model_params.k2, model_params.p, model_params.alpha_plus, model_params.alpha_minus, seed)
             case _:
                 raise ValueError("Unsupported model parameters.")
 
@@ -125,21 +134,21 @@ def simul_total_jumps(
         case _:
             raise ValueError("Unsupported model parameters. Must be VIXMertonModelParameters or VIXKouModelParameters.")
 
-    jump_counts = np.random.poisson(lmbd * (T2 - T1), size=num_paths)
+    jump_counts = rng.poisson(lmbd * (T2 - T1), size=num_paths)
     max_jumps = int(np.max(jump_counts))
 
     if max_jumps == 0:
         return np.zeros(num_paths), np.zeros(num_paths)
 
-    jump_times = np.random.uniform(low=T1, high=T2, size=(num_paths, max_jumps))
+    jump_times = rng.uniform(low=T1, high=T2, size=(num_paths, max_jumps))
 
     match model_params:
         case VIXMertonModelParameters():
-            jump_sizes = np.random.normal(loc=model_params.m, scale=model_params.delta, size=(num_paths, max_jumps))
+            jump_sizes = rng.normal(loc=model_params.m, scale=model_params.delta, size=(num_paths, max_jumps))
         case VIXKouModelParameters():
             p = model_params.p
-            jump_directions = np.random.choice([1, -1], size=(num_paths, max_jumps), p=[p, 1 - p])
-            jump_sizes = jump_directions * np.random.exponential(
+            jump_directions = np.where(rng.random((num_paths, max_jumps)) < p, 1, -1)
+            jump_sizes = jump_directions * rng.exponential(
                 scale=(jump_directions > 0) / model_params.alpha_plus + (jump_directions < 0) / model_params.alpha_minus,
                 size=(num_paths, max_jumps),
             )
@@ -156,6 +165,7 @@ def simul_tenor_jumps(
         model_params: VIXMertonModelParameters | VIXKouModelParameters,
         num_paths: int = 10**5,
         tenor_dates: np.ndarray | None = None,
+        rng: RngLike = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Simulates the sum of jumps for each tenor period for the index and
@@ -165,6 +175,8 @@ def simul_tenor_jumps(
         model_params: Model parameters containing jump process parameters.
         num_paths: Number of Monte Carlo simulation paths.
         tenor_dates: Sorted numpy array of tenor dates (default: monthly up to 5 months).
+        rng: Generator or int seed shared by every tenor period (see
+            ``utils.math_utils.as_generator``). None draws fresh entropy.
 
     Returns:
         Two 2D arrays of shape (num_paths, len(tenor_dates) - 1):
@@ -174,13 +186,14 @@ def simul_tenor_jumps(
     if tenor_dates is None:
         tenor_dates = np.arange(0, 1/2, 1/12)
     k2 = model_params.k2
+    rng = as_generator(rng)
 
     total_jumps = np.zeros((num_paths, len(tenor_dates) - 1))
     vix_jumps = np.zeros((num_paths, len(tenor_dates) - 1))
 
     for i in range(len(tenor_dates) - 1):
         total_jumps[:, i], vix_jumps[:, i] = simul_total_jumps(
-            model_params, num_paths, tenor_dates[i], tenor_dates[i + 1]
+            model_params, num_paths, tenor_dates[i], tenor_dates[i + 1], rng=rng
         )
 
     return total_jumps, np.exp(-k2 * tenor_dates[1:]) * np.cumsum(vix_jumps, axis=1)
@@ -190,7 +203,12 @@ def simul_tenor_jumps(
 #                               DIFFUSION TERMS                                  #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-def simulate_tenor_diffusions(num_paths: int, tenor_dates: np.ndarray, k1: float) -> tuple[np.ndarray, np.ndarray]:
+def simulate_tenor_diffusions(
+        num_paths: int,
+        tenor_dates: np.ndarray,
+        k1: float,
+        rng: RngLike = None,
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Simulate the diffusion parts of VIX and the index on tenor dates.
 
@@ -198,6 +216,8 @@ def simulate_tenor_diffusions(num_paths: int, tenor_dates: np.ndarray, k1: float
         num_paths: The number of Monte Carlo simulation paths.
         tenor_dates: Sorted numpy array of tenor dates.
         k1: Volatility scaling parameter.
+        rng: Generator or int seed (see ``utils.math_utils.as_generator``). None draws
+            fresh entropy.
 
     Returns:
         Two 2D arrays of shape (num_paths, len(tenor_dates) - 1):
@@ -209,13 +229,14 @@ def simulate_tenor_diffusions(num_paths: int, tenor_dates: np.ndarray, k1: float
     # Moments relative to each period's end, so only exp(-k1 * dT) appears and
     # nothing overflows at long tenors. Over [T_{i-1}, T_i] with I_i = int exp(-k1 (T_i - s)) dZ_s:
     #   Var(I_i) = (1 - exp(-2 k1 dT)) / (2 k1),  Cov(I_i, dZ_i) = (1 - exp(-k1 dT)) / k1.
+    rng = as_generator(rng)
     dT = np.diff(tenor_dates)
     variations = -np.expm1(-2 * k1 * dT) / (2 * k1)
     correlations = -np.expm1(-k1 * dT) / k1
 
-    dIZ = np.random.randn(num_paths, len(tenor_dates) - 1) * np.sqrt(variations)
+    dIZ = rng.standard_normal((num_paths, len(tenor_dates) - 1)) * np.sqrt(variations)
 
-    dZ = np.random.randn(num_paths, len(tenor_dates) - 1)
+    dZ = rng.standard_normal((num_paths, len(tenor_dates) - 1))
     dZ = (correlations / variations) * dIZ + \
          np.sqrt(np.maximum(dT - correlations**2 / variations, 0.0)) * dZ
 

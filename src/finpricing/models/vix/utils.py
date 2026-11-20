@@ -28,3 +28,24 @@ def vix_drift_coeff(T: float, model_params) -> float:
     else:
         raise ValueError(f"Unsupported model type: {type(model_params)}")
 
+
+
+def jump_second_moment(model_params) -> float:
+    """
+    Jump second moment ∫ x² ν(dx) of the Lévy measure, the ``constraint_cf`` of the model.
+
+    It ties the index variance to the variance swap rate:
+    σ²_i = (V^i_{T_i} / V^i_0) · (V^i_0 − b_i² ∫ x² ν(dx)).
+
+    Merton: λ (m² + δ²). Kou: 2 λ (p / α₊² + (1 − p) / α₋²).
+    """
+    match model_params:
+        case VIXMertonModelParameters():
+            return model_params.lmbd * (model_params.m ** 2 + model_params.delta ** 2)
+        case VIXKouModelParameters():
+            return 2 * model_params.lmbd * (
+                model_params.p / model_params.alpha_plus ** 2
+                + (1 - model_params.p) / model_params.alpha_minus ** 2
+            )
+        case _:
+            raise ValueError(f"Unsupported model type: {type(model_params)}")
